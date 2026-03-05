@@ -19,6 +19,14 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddHealthChecks();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+        policy
+            .AllowAnyOrigin()
+            .AllowAnyMethod()
+            .AllowAnyHeader());
+});
 builder.Services.AddSingleton<AuthorizedPlayerRegistry>();
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
@@ -36,6 +44,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
+app.UseCors();
 
 app.MapPost("/commands/setup", async (
     SetupCommand request,
