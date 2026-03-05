@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>dotnet-ClanWarReminder.Worker-52e4bafb-2371-4873-bf74-0c142e513973</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ClanWarReminder.Application\ClanWarReminder.Application.csproj" />
+    <ProjectReference Include="..\ClanWarReminder.Infrastructure\ClanWarReminder.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

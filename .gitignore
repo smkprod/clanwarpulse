@@ -1,0 +1,24 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Local tooling
+.dotnet_home/
+
+# Build outputs
+**/bin/
+**/obj/
+
+# Node
+**/node_modules/
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
+
+# OS
+.DS_Store
+Thumbs.db

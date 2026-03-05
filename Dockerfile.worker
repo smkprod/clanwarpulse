@@ -1,0 +1,18 @@
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+
+COPY src/ClanWarReminder.Worker/ClanWarReminder.Worker.csproj src/ClanWarReminder.Worker/
+COPY src/ClanWarReminder.Application/ClanWarReminder.Application.csproj src/ClanWarReminder.Application/
+COPY src/ClanWarReminder.Domain/ClanWarReminder.Domain.csproj src/ClanWarReminder.Domain/
+COPY src/ClanWarReminder.Infrastructure/ClanWarReminder.Infrastructure.csproj src/ClanWarReminder.Infrastructure/
+
+RUN dotnet restore src/ClanWarReminder.Worker/ClanWarReminder.Worker.csproj
+
+COPY src/ src/
+RUN dotnet publish src/ClanWarReminder.Worker/ClanWarReminder.Worker.csproj -c Release -o /app/publish /p:UseAppHost=false
+
+FROM mcr.microsoft.com/dotnet/runtime:10.0 AS final
+WORKDIR /app
+
+COPY --from=build /app/publish .
+ENTRYPOINT ["dotnet", "ClanWarReminder.Worker.dll"]

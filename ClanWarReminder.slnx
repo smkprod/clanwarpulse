@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ClanWarReminder.Api/ClanWarReminder.Api.csproj" />
+    <Project Path="src/ClanWarReminder.Application/ClanWarReminder.Application.csproj" />
+    <Project Path="src/ClanWarReminder.Domain/ClanWarReminder.Domain.csproj" />
+    <Project Path="src/ClanWarReminder.Infrastructure/ClanWarReminder.Infrastructure.csproj" />
+    <Project Path="src/ClanWarReminder.Worker/ClanWarReminder.Worker.csproj" />
+  </Folder>
+</Solution>

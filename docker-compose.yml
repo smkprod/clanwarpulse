@@ -1,0 +1,61 @@
+services:
+  db:
+    image: postgres:16
+    container_name: clanwarreminder-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: clanwar_reminder
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d clanwar_reminder"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: clanwarreminder-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: Host=db;Port=5432;Database=clanwar_reminder;Username=postgres;Password=postgres
+      ClashRoyale__BaseUrl: https://api.clashroyale.com/v1
+      ClashRoyale__ApiToken: ${CLASH_ROYALE_API_TOKEN:-}
+      Telegram__BotToken: ${TELEGRAM_BOT_TOKEN:-}
+      Telegram__BotUsername: ${TELEGRAM_BOT_USERNAME:-}
+      Telegram__MaxAuthAgeMinutes: 60
+      Worker__PollMinutes: 20
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: clanwarreminder-worker
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DOTNET_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: Host=db;Port=5432;Database=clanwar_reminder;Username=postgres;Password=postgres
+      ClashRoyale__BaseUrl: https://api.clashroyale.com/v1
+      ClashRoyale__ApiToken: ${CLASH_ROYALE_API_TOKEN:-}
+      Telegram__BotToken: ${TELEGRAM_BOT_TOKEN:-}
+      Telegram__BotUsername: ${TELEGRAM_BOT_USERNAME:-}
+      Telegram__MaxAuthAgeMinutes: 60
+      Worker__PollMinutes: 20
+
+volumes:
+  postgres-data:
