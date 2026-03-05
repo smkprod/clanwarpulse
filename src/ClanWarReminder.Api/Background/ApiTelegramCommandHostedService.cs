@@ -34,9 +34,11 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (string.IsNullOrWhiteSpace(_telegramOptions.BotToken))
+        var botToken = _telegramOptions.BotToken?.Trim();
+        if (!HasUsableBotToken(botToken))
         {
-            _logger.LogWarning("Telegram command polling in API disabled because Telegram bot token is not configured.");
+            _logger.LogWarning(
+                "Telegram command polling in API disabled because Telegram bot token is not configured or still has placeholder value.");
             return;
         }
 
@@ -46,7 +48,7 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
         {
             try
             {
-                var url = BuildGetUpdatesUrl(_telegramOptions.BotToken, _offset);
+                var url = BuildGetUpdatesUrl(botToken!, _offset);
                 var response = await http.GetFromJsonAsync<GetUpdatesResponse>(url, cancellationToken: stoppingToken);
 
                 if (response?.Ok != true || response.Result is null || response.Result.Count == 0)
@@ -331,6 +333,26 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
     {
         var offsetPart = offset > 0 ? $"&offset={offset}" : string.Empty;
         return $"https://api.telegram.org/bot{token}/getUpdates?timeout=25{offsetPart}";
+    }
+
+    private static bool HasUsableBotToken(string? token)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return false;
+        }
+
+        if (token.Contains("YOUR_TELEGRAM_BOT_TOKEN", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (token.StartsWith('<') && token.EndsWith('>'))
+        {
+            return false;
+        }
+
+        return true;
     }
 
     private static string BuildUserDisplayName(TelegramUserDto user)
