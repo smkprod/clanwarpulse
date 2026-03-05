@@ -3,6 +3,7 @@ using ClanWarReminder.Application.Abstractions.Integrations;
 using ClanWarReminder.Application.Abstractions.Persistence;
 using ClanWarReminder.Application.Models;
 using ClanWarReminder.Api.Auth;
+using ClanWarReminder.Api.Background;
 using ClanWarReminder.Application.Services;
 using ClanWarReminder.Domain.Common;
 using ClanWarReminder.Domain.Enums;
@@ -19,6 +20,8 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddHealthChecks();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddHostedService<ApiWarReminderHostedService>();
+builder.Services.AddHostedService<ApiTelegramCommandHostedService>();
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>

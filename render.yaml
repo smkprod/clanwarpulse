@@ -28,29 +28,5 @@ services:
         sync: false
       - key: Telegram__MaxAuthAgeMinutes
         value: "60"
-
-  - type: worker
-    name: clanwarpulse-worker
-    env: docker
-    dockerfilePath: ./Dockerfile.worker
-    plan: free
-    autoDeploy: true
-    envVars:
-      - key: DOTNET_ENVIRONMENT
-        value: Production
-      - key: ConnectionStrings__DefaultConnection
-        fromDatabase:
-          name: clanwarpulse-db
-          property: connectionString
-      - key: ClashRoyale__BaseUrl
-        value: https://api.clashroyale.com/v1
-      - key: ClashRoyale__ApiToken
-        sync: false
-      - key: Telegram__BotToken
-        sync: false
-      - key: Telegram__BotUsername
-        sync: false
-      - key: Telegram__MaxAuthAgeMinutes
-        value: "60"
       - key: Worker__PollMinutes
         value: "5"
