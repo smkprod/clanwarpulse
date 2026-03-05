@@ -17,6 +17,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddHttpClient();
 builder.Services.AddHealthChecks();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -470,6 +471,32 @@ app.MapPost("/commands/notify/not-played", async (
 
 app.MapHealthChecks("/health");
 app.MapGet("/miniapp", () => Results.Redirect("/miniapp/index.html"));
+app.MapGet("/debug/server-ip", async (IHttpClientFactory httpClientFactory, CancellationToken cancellationToken) =>
+{
+    var client = httpClientFactory.CreateClient();
+    client.Timeout = TimeSpan.FromSeconds(10);
+
+    static async Task<string?> GetIpAsync(HttpClient httpClient, string url, CancellationToken ct)
+    {
+        var value = (await httpClient.GetStringAsync(url, ct)).Trim();
+        return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    var externalIp = await GetIpAsync(client, "https://api.ipify.org", cancellationToken)
+        ?? await GetIpAsync(client, "https://ifconfig.me/ip", cancellationToken);
+
+    if (string.IsNullOrWhiteSpace(externalIp))
+    {
+        return Results.Problem("Could not determine external IP.");
+    }
+
+    return Results.Ok(new
+    {
+        externalIp,
+        cidr = $"{externalIp}/32",
+        checkedAtUtc = DateTimeOffset.UtcNow
+    });
+});
 
 app.Run();
 
