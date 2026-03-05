@@ -54,20 +54,40 @@ public static class DependencyInjection
 
     private static string ResolveConnectionString(IConfiguration configuration)
     {
-        var direct = configuration.GetConnectionString("DefaultConnection");
-        if (!string.IsNullOrWhiteSpace(direct))
+        // 1) Explicit env override on platforms like Render.
+        var explicitEnv = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
+        if (!string.IsNullOrWhiteSpace(explicitEnv))
         {
-            return direct;
+            return NormalizeIfPostgresUri(explicitEnv);
         }
 
+        // 2) Common managed DB url env var.
         var databaseUrl = configuration["DATABASE_URL"];
         if (!string.IsNullOrWhiteSpace(databaseUrl))
         {
             return BuildNpgsqlConnectionString(databaseUrl);
         }
 
+        // 3) Fallback to app configuration (local/dev defaults).
+        var direct = configuration.GetConnectionString("DefaultConnection");
+        if (!string.IsNullOrWhiteSpace(direct))
+        {
+            return NormalizeIfPostgresUri(direct);
+        }
+
         throw new InvalidOperationException(
             "Database connection is not configured. Set ConnectionStrings__DefaultConnection or DATABASE_URL.");
+    }
+
+    private static string NormalizeIfPostgresUri(string value)
+    {
+        if (value.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) ||
+            value.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
+        {
+            return BuildNpgsqlConnectionString(value);
+        }
+
+        return value;
     }
 
     private static string BuildNpgsqlConnectionString(string databaseUrl)
