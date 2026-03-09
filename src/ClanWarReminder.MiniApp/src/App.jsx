@@ -1,29 +1,36 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  BottomNavigation,
+  BottomNavigationAction,
   Box,
   CircularProgress,
   Container,
   CssBaseline,
+  Paper,
   Stack,
   ThemeProvider,
   Typography
 } from "@mui/material";
 import { apiGet, apiPost } from "./api/client";
-import { SignInPage } from "./pages/SignInPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { PlayerProfilePage } from "./pages/PlayerProfilePage";
+import { SignInPage } from "./pages/SignInPage";
 import { getTelegramChatId, getTelegramInitData, initTelegramWebApp, notify, openBotLink } from "./lib/telegram";
 import { appTheme } from "./theme";
 
 initTelegramWebApp();
 
 const SESSION_STORAGE_KEY = "clanwarreminder.playerTag";
+const MOBILE_TABS = ["Home", "Members", "Opponents", "History", "Clans", "Bot"];
 
 export default function App() {
   const [playerTag, setPlayerTag] = useState("");
   const [busy, setBusy] = useState(false);
-  const [feedback, setFeedback] = useState({ text: "Введите тег игрока или дождитесь автоматического входа через Telegram.", severity: "info" });
+  const [feedback, setFeedback] = useState({
+    text: "Введите тег игрока или дождитесь автоматического входа через Telegram.",
+    severity: "info"
+  });
   const [session, setSession] = useState(null);
   const [tab, setTab] = useState(0);
   const [selectedClanTag, setSelectedClanTag] = useState("");
@@ -35,7 +42,7 @@ export default function App() {
 
   const titleLine = useMemo(() => {
     if (!session) {
-      return "Вход через Telegram и тег игрока";
+      return "Первый вход: Telegram + тег Clash Royale";
     }
 
     return `${session.identity.playerName} | ${session.identity.clanName}`;
@@ -77,10 +84,16 @@ export default function App() {
         await loadTelegramSync(data.session.identity.playerTag);
         await loadPlayerProfile(data.session.identity.playerTag);
         setCurrentView("dashboard");
-        setFeedback({ text: `Автоматически восстановлен вход для ${data.session.identity.playerName}.`, severity: "success" });
+        setFeedback({
+          text: `Автоматически восстановлен вход для ${data.session.identity.playerName}.`,
+          severity: "success"
+        });
       } catch (error) {
         if (!cancelled) {
-          setFeedback({ text: error.message || "Не удалось восстановить вход через Telegram.", severity: "warning" });
+          setFeedback({
+            text: error.message || "Не удалось восстановить вход через Telegram.",
+            severity: "warning"
+          });
         }
       } finally {
         if (!cancelled) {
@@ -111,7 +124,10 @@ export default function App() {
       await loadTelegramSync(data.identity.playerTag);
       await loadPlayerProfile(data.identity.playerTag);
       setCurrentView("dashboard");
-      setFeedback({ text: `Загружен игрок ${data.identity.playerName} (${data.identity.playerTag})`, severity: "success" });
+      setFeedback({
+        text: `Загружен игрок ${data.identity.playerName} (${data.identity.playerTag})`,
+        severity: "success"
+      });
       notify("success");
     });
   }
@@ -122,7 +138,9 @@ export default function App() {
     }
 
     await runBusy(async () => {
-      const data = await apiGet(`/miniapp/player/dashboard?playerTag=${encodeURIComponent(session.identity.playerTag)}`);
+      const data = await apiGet(
+        `/miniapp/player/dashboard?playerTag=${encodeURIComponent(session.identity.playerTag)}`
+      );
       setSession(data);
       window.localStorage.setItem(SESSION_STORAGE_KEY, data.identity.playerTag);
       setClanDetails(null);
@@ -147,7 +165,10 @@ export default function App() {
 
   async function notifyNotPlayed() {
     if (!session?.linkedTelegramGroupId) {
-      setFeedback({ text: "Для этого клана не настроена Telegram-группа. Сначала выполните /setup #CLANTAG в чате.", severity: "warning" });
+      setFeedback({
+        text: "Для этого клана не настроена Telegram-группа. Сначала выполните /setup #CLANTAG в чате.",
+        severity: "warning"
+      });
       return;
     }
 
@@ -186,7 +207,9 @@ export default function App() {
       return;
     }
 
-    const data = await apiGet(`/miniapp/player/profile?playerTag=${encodeURIComponent(tag)}&windowWeeks=${encodeURIComponent(windowWeeks)}`);
+    const data = await apiGet(
+      `/miniapp/player/profile?playerTag=${encodeURIComponent(tag)}&windowWeeks=${encodeURIComponent(windowWeeks)}`
+    );
     setPlayerProfile(data);
   }
 
@@ -199,7 +222,10 @@ export default function App() {
 
   async function relinkTelegramUser(platformUserId, displayName, targetPlayerTag) {
     if (!session?.linkedTelegramGroupId) {
-      setFeedback({ text: "Для этого клана не настроена Telegram-группа.", severity: "warning" });
+      setFeedback({
+        text: "Для этого клана не настроена Telegram-группа.",
+        severity: "warning"
+      });
       return;
     }
 
@@ -231,9 +257,16 @@ export default function App() {
   return (
     <ThemeProvider theme={appTheme}>
       <CssBaseline />
-      <Container maxWidth="md" sx={{ py: 2.5, pb: 4, overflowX: "hidden" }}>
-        <Stack spacing={1.5} sx={{ mb: 2.5 }}>
-          <Typography variant="h4">Напоминание о войне кланов</Typography>
+      <Container
+        maxWidth="md"
+        sx={{
+          py: 2.5,
+          pb: session && currentView === "dashboard" ? { xs: 12, sm: 4 } : 4,
+          overflowX: "hidden"
+        }}
+      >
+        <Stack spacing={1.6} sx={{ mb: 2.5 }}>
+          <Typography variant="h4">Clan War Control</Typography>
           <Typography variant="body2" sx={{ color: "#b3d3e8", overflowWrap: "anywhere" }}>
             {titleLine}
           </Typography>
@@ -255,27 +288,48 @@ export default function App() {
         )}
 
         {session && currentView === "dashboard" && (
-          <DashboardPage
-            tab={tab}
-            onTabChange={setTab}
-            dashboard={session.dashboard}
-            identity={session.identity}
-            authorizedTags={session.authorizedPlayerTags ?? []}
-            selectedClanTag={selectedClanTag}
-            clanDetails={clanDetails}
-            onRefresh={refreshDashboard}
-            onLoadClanDetails={loadClanDetails}
-            onOpenBot={() => openBotLink(session.botLink)}
-            hasBotLink={Boolean(session.botLink)}
-            onNotifyNotPlayed={notifyNotPlayed}
-            canNotifyNotPlayed={Boolean(session.linkedTelegramGroupId)}
-            telegramSync={telegramSync}
-            playerProfile={playerProfile}
-            onOpenPlayerProfile={openPlayerProfile}
-            onLoadTelegramSync={() => runBusy(() => loadTelegramSync(session.identity.playerTag))}
-            onRelinkTelegramUser={relinkTelegramUser}
-            busy={busy}
-          />
+          <>
+            <DashboardPage
+              tab={tab}
+              onTabChange={setTab}
+              dashboard={session.dashboard}
+              identity={session.identity}
+              authorizedTags={session.authorizedPlayerTags ?? []}
+              selectedClanTag={selectedClanTag}
+              clanDetails={clanDetails}
+              onRefresh={refreshDashboard}
+              onLoadClanDetails={loadClanDetails}
+              onOpenBot={() => openBotLink(session.botLink)}
+              hasBotLink={Boolean(session.botLink)}
+              onNotifyNotPlayed={notifyNotPlayed}
+              canNotifyNotPlayed={Boolean(session.linkedTelegramGroupId)}
+              telegramSync={telegramSync}
+              playerProfile={playerProfile}
+              onOpenPlayerProfile={openPlayerProfile}
+              onLoadTelegramSync={() => runBusy(() => loadTelegramSync(session.identity.playerTag))}
+              onRelinkTelegramUser={relinkTelegramUser}
+              busy={busy}
+            />
+            <Paper
+              elevation={0}
+              sx={{
+                position: "fixed",
+                left: 12,
+                right: 12,
+                bottom: 12,
+                zIndex: 20,
+                display: { xs: "block", md: "none" },
+                borderRadius: 3,
+                overflow: "hidden"
+              }}
+            >
+              <BottomNavigation showLabels value={tab} onChange={(_, value) => setTab(value)}>
+                {MOBILE_TABS.map((label, index) => (
+                  <BottomNavigationAction key={label} label={label} value={index} />
+                ))}
+              </BottomNavigation>
+            </Paper>
+          </>
         )}
 
         {session && currentView === "player" && (
@@ -284,10 +338,16 @@ export default function App() {
             profileWindowWeeks={profileWindowWeeks}
             onWindowChange={(value) => {
               setProfileWindowWeeks(value);
-              return runBusy(() => loadPlayerProfile(playerProfile?.playerTag ?? session.identity.playerTag, value));
+              return runBusy(() =>
+                loadPlayerProfile(playerProfile?.playerTag ?? session.identity.playerTag, value)
+              );
             }}
             onBack={() => setCurrentView("dashboard")}
-            onRefresh={() => runBusy(() => loadPlayerProfile(playerProfile?.playerTag ?? session.identity.playerTag, profileWindowWeeks))}
+            onRefresh={() =>
+              runBusy(() =>
+                loadPlayerProfile(playerProfile?.playerTag ?? session.identity.playerTag, profileWindowWeeks)
+              )
+            }
             busy={busy}
           />
         )}
