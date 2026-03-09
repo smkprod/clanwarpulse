@@ -373,8 +373,13 @@ public class ClashRoyaleClient : IClashRoyaleClient
                     .DefaultIfEmpty()
                     .Sum();
                 var hasContribution = group.Any(x => x.Contribution.HasValue);
+                var warWins = group.Count(x => x.IsWin == true);
+                var warLosses = group.Count(x => x.IsWin == false);
                 double? avgContributionPerBattle = hasContribution && battlesPlayed > 0
                     ? Math.Round(contributionSum / (double)battlesPlayed, 1)
+                    : null;
+                double? warWinRate = warWins + warLosses > 0
+                    ? Math.Round(warWins * 100d / (warWins + warLosses), 1)
                     : null;
                 var isColosseumWeighted = battlesPlayed >= 8 || contributionSum >= 1200;
 
@@ -390,7 +395,10 @@ public class ClashRoyaleClient : IClashRoyaleClient
                     Math.Round((battlesPlayed / 16d) * 100d, 1),
                     battlesPlayed >= 16,
                     hasContribution ? contributionSum : null,
-                    avgContributionPerBattle);
+                    avgContributionPerBattle,
+                    warWins,
+                    warLosses,
+                    warWinRate);
             })
             .OrderByDescending(x => x.StartedAtUtc)
             .ToList();
@@ -399,6 +407,7 @@ public class ClashRoyaleClient : IClashRoyaleClient
         {
             var currentWeekKey = BuildWarKey(currentRace);
             var startedAt = StartOfWarWeek(DateTimeOffset.UtcNow);
+            var existingIndex = recentWeeks.FindIndex(x => string.Equals(x.WarKey, currentWeekKey, StringComparison.OrdinalIgnoreCase));
             var currentWeek = new PlayerWarWeekSummary(
                 currentWeekKey,
                 startedAt,
@@ -411,9 +420,11 @@ public class ClashRoyaleClient : IClashRoyaleClient
                 Math.Round((currentWeekBattles / 16d) * 100d, 1),
                 currentWeekBattles >= 16,
                 currentWeekContribution,
-                currentWeekBattles > 0 ? Math.Round(currentWeekContribution / (double)currentWeekBattles, 1) : 0);
+                currentWeekBattles > 0 ? Math.Round(currentWeekContribution / (double)currentWeekBattles, 1) : 0,
+                existingIndex >= 0 ? recentWeeks[existingIndex].WarWins : 0,
+                existingIndex >= 0 ? recentWeeks[existingIndex].WarLosses : 0,
+                existingIndex >= 0 ? recentWeeks[existingIndex].WarWinRate : null);
 
-            var existingIndex = recentWeeks.FindIndex(x => string.Equals(x.WarKey, currentWeekKey, StringComparison.OrdinalIgnoreCase));
             if (existingIndex >= 0)
             {
                 recentWeeks[existingIndex] = currentWeek;
@@ -473,7 +484,7 @@ public class ClashRoyaleClient : IClashRoyaleClient
     private async Task<RiverRaceLogResponse> GetRiverRaceLogAsync(string clanTag, CancellationToken cancellationToken)
     {
         var encodedTag = Uri.EscapeDataString(NormalizeTag(clanTag));
-        using var request = CreateRequest(HttpMethod.Get, $"{_options.BaseUrl}/clans/{encodedTag}/riverracelog?limit=10");
+        using var request = CreateRequest(HttpMethod.Get, $"{_options.BaseUrl}/clans/{encodedTag}/riverracelog?limit=25");
         using var response = await _httpClient.SendAsync(request, cancellationToken);
         response.EnsureSuccessStatusCode();
 
@@ -596,11 +607,20 @@ public class ClashRoyaleClient : IClashRoyaleClient
             contribution = team.Crowns.Value * 100;
         }
 
+        var teamCrowns = team?.Crowns;
+        var opponentCrowns = entry.Opponent.FirstOrDefault()?.Crowns;
+        bool? isWin = null;
+        if (teamCrowns.HasValue && opponentCrowns.HasValue && teamCrowns.Value != opponentCrowns.Value)
+        {
+            isWin = teamCrowns.Value > opponentCrowns.Value;
+        }
+
         return new PlayerWarBattleEntry(
             battleTimeUtc,
             NormalizeTag(clan.Tag),
             clan.Name,
-            contribution);
+            contribution,
+            isWin);
     }
 
     private static bool TryParseBattleTime(string? value, out DateTimeOffset battleTimeUtc)
@@ -860,5 +880,6 @@ public class ClashRoyaleClient : IClashRoyaleClient
         DateTimeOffset BattleTimeUtc,
         string ClanTag,
         string ClanName,
-        int? Contribution);
+        int? Contribution,
+        bool? IsWin);
 }

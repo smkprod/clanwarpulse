@@ -70,6 +70,7 @@ export function PlayerProfilePage({ profile, profileWindowWeeks, onWindowChange,
         <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
           <MetricCard label="Участие" value={`${fmt(profile.overallParticipationRate)}%`} helper={`Покрытие ${profile.availableHistoryWeeks} КВ, показано ${Math.min(profile.profileWindowWeeks, profile.availableHistoryWeeks || profile.profileWindowWeeks)}`} />
           <MetricCard label="Среднее боев" value={fmt(profile.averageBattlesPerWeek)} helper={`Всего учтено боев ${profile.totalTrackedWarBattles}`} />
+          <MetricCard label="Winrate КВ" value={`${fmt(profile.recentWarWinRate)}%`} helper={`${profile.recentWarWins}-${profile.recentWarLosses} по боевым колодам`} />
           <MetricCard label="Прогноз" value={`${profile.predictedNextWeekBattles}/16`} helper={`${profile.predictedNextWeekContribution} очков в следующем КВ`} />
           <MetricCard label="Сейчас" value={`${profile.currentWeekBattlesPlayed}/16`} helper={`${profile.currentWeekContribution} очков в текущем КВ`} />
         </Stack>
@@ -101,6 +102,10 @@ export function PlayerProfilePage({ profile, profileWindowWeeks, onWindowChange,
                 label="Речная гонка"
                 value={riverRaceWeeks.length ? `${riverRaceWeeks.length} КВ в выборке` : "нет в выборке"}
               />
+              <InsightRow
+                label="Winrate по боям"
+                value={`${fmt(profile.recentWarWinRate)}% (${profile.recentWarWins}-${profile.recentWarLosses})`}
+              />
             </Stack>
           </Paper>
           <Paper variant="outlined" sx={{ ...cardSx, flex: 1 }}>
@@ -116,6 +121,10 @@ export function PlayerProfilePage({ profile, profileWindowWeeks, onWindowChange,
                 label="Очки за бой сейчас"
                 value={fmt(profile.currentWeekAverageContributionPerBattle)}
               />
+              <InsightRow
+                label="Winrate сейчас"
+                value={`${fmt(profile.currentWeekWarWinRate)}% (${profile.currentWeekWarWins}-${profile.currentWeekWarLosses})`}
+              />
             </Stack>
           </Paper>
         </Stack>
@@ -124,7 +133,7 @@ export function PlayerProfilePage({ profile, profileWindowWeeks, onWindowChange,
           <Typography sx={{ fontWeight: 700, mb: 0.8 }}>Почему такой прогноз</Typography>
           <Typography variant="body2" color="text.secondary">
             Основа профиля считается по последним {profile.profileWindowWeeks} КВ. Сейчас доступно {profile.availableHistoryWeeks} КВ истории, качество оценки: {profile.dataQualityLabel.toLowerCase()}.
-            Недели с высоким вкладом и большим числом боев получают больший вес, чтобы колизей влиял на прогноз сильнее обычной речной гонки.
+            Недели с высоким вкладом и большим числом боев получают больший вес, чтобы колизей влиял на прогноз сильнее обычной речной гонки. Winrate по клановым колодам берется из battle log Clash Royale API.
           </Typography>
         </Paper>
 
@@ -165,7 +174,7 @@ export function PlayerProfilePage({ profile, profileWindowWeeks, onWindowChange,
                     {week.warKey} • {week.clanName} {week.isColosseumWeighted ? "• приоритет для прогноза" : ""}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    {week.battlesPlayed}/{week.maxBattles} • {fmt(week.participationRate)}%{week.totalContribution != null ? ` • ${week.totalContribution} очков` : ""}
+                    {week.battlesPlayed}/{week.maxBattles} • {fmt(week.participationRate)}%{week.totalContribution != null ? ` • ${week.totalContribution} очков` : ""}{week.warWinRate != null ? ` • WR ${fmt(week.warWinRate)}%` : ""}
                   </Typography>
                 </Stack>
                 <LinearProgress variant="determinate" value={Math.min(100, week.participationRate)} sx={progressSx} />
@@ -192,7 +201,7 @@ function TrendChart({ weeks }) {
           <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={0.3}>
             <Typography variant="body2">{week.warKey}</Typography>
             <Typography variant="caption" color="text.secondary">
-              {week.totalContribution != null ? `${week.totalContribution} очков` : "очки недоступны"} • {week.battlesPlayed}/16
+              {week.totalContribution != null ? `${week.totalContribution} очков` : "очки недоступны"} • {week.battlesPlayed}/16{week.warWinRate != null ? ` • WR ${fmt(week.warWinRate)}%` : ""}
             </Typography>
           </Stack>
           <Stack direction="row" spacing={0.7} sx={{ mt: 0.45 }}>

@@ -42,7 +42,10 @@ public class PlayerWarProfileService
                 0,
                 false,
                 0,
-                0));
+                0,
+                0,
+                0,
+                null));
         }
 
         var currentWeek = trackedWeeks
@@ -52,6 +55,11 @@ public class PlayerWarProfileService
         var fullCompletionRate = Math.Round(trackedWeeks.Count(x => x.CompletedAllBattles) * 100d / trackedWeeks.Count, 1);
         var averageBattlesPerWeek = Math.Round(trackedWeeks.Average(x => x.BattlesPlayed), 1);
         var totalTrackedWarBattles = trackedWeeks.Sum(x => x.BattlesPlayed);
+        var recentWarWins = trackedWeeks.Sum(x => x.WarWins);
+        var recentWarLosses = trackedWeeks.Sum(x => x.WarLosses);
+        var recentWarWinRate = recentWarWins + recentWarLosses > 0
+            ? Math.Round(recentWarWins * 100d / (recentWarWins + recentWarLosses), 1)
+            : 0;
         var activityScore = BuildActivityScore(trackedWeeks);
         var hasMeaningfulHistory = trackedWeeks.Any(x => x.BattlesPlayed > 0 || (x.TotalContribution ?? 0) > 0);
         var activityLabel = !hasMeaningfulHistory
@@ -90,6 +98,12 @@ public class PlayerWarProfileService
             activityLabel,
             predictedNextWeekBattles,
             predictedNextWeekContribution,
+            recentWarWins,
+            recentWarLosses,
+            recentWarWinRate,
+            currentWeek.WarWins,
+            currentWeek.WarLosses,
+            currentWeek.WarWinRate ?? 0,
             trackedWeeks,
             recentClans,
             availableHistoryWeeks,
@@ -111,7 +125,9 @@ public class PlayerWarProfileService
 
         foreach (var week in storedWeeks)
         {
-            merged[BuildMergeKey(week.WarKey, week.ClanTag)] = new PlayerWarWeekSummary(
+            var mergeKey = BuildMergeKey(week.WarKey, week.ClanTag);
+            merged.TryGetValue(mergeKey, out var fallbackWeek);
+            merged[mergeKey] = new PlayerWarWeekSummary(
                 week.WarKey,
                 week.StartedAtUtc,
                 week.EndedAtUtc,
@@ -123,7 +139,10 @@ public class PlayerWarProfileService
                 Math.Round((week.BattlesPlayed / (double)Math.Max(week.MaxBattles, 16)) * 100d, 1),
                 week.BattlesPlayed >= Math.Max(week.MaxBattles, 16),
                 week.TotalContribution,
-                week.AverageContributionPerBattle > 0 ? week.AverageContributionPerBattle : null);
+                week.AverageContributionPerBattle > 0 ? week.AverageContributionPerBattle : null,
+                fallbackWeek?.WarWins ?? 0,
+                fallbackWeek?.WarLosses ?? 0,
+                fallbackWeek?.WarWinRate);
         }
 
         return merged.Values

@@ -110,7 +110,10 @@ public sealed record PlayerWarWeekSummary(
     double ParticipationRate,
     bool CompletedAllBattles,
     int? TotalContribution,
-    double? AverageContributionPerBattle);
+    double? AverageContributionPerBattle,
+    int WarWins,
+    int WarLosses,
+    double? WarWinRate);
 
 public sealed record PlayerRecentClanEntry(
     string ClanTag,
@@ -149,6 +152,12 @@ public sealed record PlayerWarProfile(
     string ActivityLabel,
     int PredictedNextWeekBattles,
     int PredictedNextWeekContribution,
+    int RecentWarWins,
+    int RecentWarLosses,
+    double RecentWarWinRate,
+    int CurrentWeekWarWins,
+    int CurrentWeekWarLosses,
+    double CurrentWeekWarWinRate,
     IReadOnlyList<PlayerWarWeekSummary> RecentWeeks,
     IReadOnlyList<PlayerRecentClanEntry> RecentClans,
     int AvailableHistoryWeeks,
