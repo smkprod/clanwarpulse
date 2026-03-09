@@ -133,7 +133,7 @@ public class PlayerWarProfileService
                 week.EndedAtUtc,
                 week.ClanTag,
                 week.ClanName,
-                week.BattlesPlayed >= 8 || week.TotalContribution >= 1200,
+                false,
                 week.BattlesPlayed,
                 Math.Max(week.MaxBattles, 16),
                 Math.Round((week.BattlesPlayed / (double)Math.Max(week.MaxBattles, 16)) * 100d, 1),
@@ -184,7 +184,7 @@ public class PlayerWarProfileService
             .Select((week, index) => new
             {
                 week.BattlesPlayed,
-                Weight = BuildPredictionWeight(index, week.IsColosseumWeighted)
+                Weight = BuildPredictionWeight(index)
             })
             .ToList();
 
@@ -206,7 +206,7 @@ public class PlayerWarProfileService
             .Select((week, index) => new
             {
                 Average = week.AverageContributionPerBattle!.Value,
-                Weight = BuildPredictionWeight(index, week.IsColosseumWeighted)
+                Weight = BuildPredictionWeight(index)
             })
             .ToList();
 
@@ -235,9 +235,9 @@ public class PlayerWarProfileService
     private static string BuildMergeKey(string warKey, string clanTag)
         => $"{warKey}:{TagNormalizer.NormalizeClanOrPlayerTag(clanTag)}";
 
-    private static double BuildPredictionWeight(int index, bool isColosseumWeighted)
+    private static double BuildPredictionWeight(int index)
     {
-        var recencyWeight = index switch
+        return index switch
         {
             0 => 1.8,
             1 => 1.45,
@@ -245,8 +245,6 @@ public class PlayerWarProfileService
             3 => 1.0,
             _ => 0.85
         };
-
-        return isColosseumWeighted ? recencyWeight * 1.35 : recencyWeight;
     }
 
     private static int BuildActivityScore(IReadOnlyList<PlayerWarWeekSummary> trackedWeeks)

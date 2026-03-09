@@ -382,15 +382,13 @@ public class ClashRoyaleClient : IClashRoyaleClient
                 double? warWinRate = warWins + warLosses > 0
                     ? Math.Round(warWins * 100d / (warWins + warLosses), 1)
                     : null;
-                var isColosseumWeighted = battlesPlayed >= 8 || contributionSum >= 1200;
-
                 return new PlayerWarWeekSummary(
                     group.Key,
                     startedAt,
                     endAt,
                     weekClan?.ClanTag ?? identity.ClanTag,
                     weekClan?.ClanName ?? identity.ClanName,
-                    isColosseumWeighted,
+                    false,
                     battlesPlayed,
                     16,
                     Math.Round((battlesPlayed / 16d) * 100d, 1),
@@ -434,7 +432,7 @@ public class ClashRoyaleClient : IClashRoyaleClient
                     endedAt,
                     NormalizeTag(ownStanding.Clan.Tag),
                     ownStanding.Clan.Name,
-                    totalContribution >= 1200 || participant.BattlesPlayed >= 8,
+                    false,
                     participant.BattlesPlayed,
                     maxBattles,
                     Math.Round((participant.BattlesPlayed / (double)maxBattles) * 100d, 1),
@@ -470,7 +468,7 @@ public class ClashRoyaleClient : IClashRoyaleClient
                 startedAt.AddDays(4),
                 identity.ClanTag,
                 identity.ClanName,
-                currentWeekContribution >= 1200 || currentWeekBattles >= 8,
+                false,
                 currentWeekBattles,
                 16,
                 Math.Round((currentWeekBattles / 16d) * 100d, 1),

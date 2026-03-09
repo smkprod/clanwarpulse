@@ -24,8 +24,6 @@ export function PlayerProfilePage({ profile, profileWindowWeeks, onWindowChange,
   const averageContributionPerBattle = profile.totalTrackedWarBattles > 0
     ? recentWeeks.reduce((sum, week) => sum + (week.totalContribution ?? 0), 0) / profile.totalTrackedWarBattles
     : 0;
-  const colosseumWeeks = recentWeeks.filter((week) => week.isColosseumWeighted);
-  const riverRaceWeeks = recentWeeks.filter((week) => !week.isColosseumWeighted);
   const recentFormScore = recentWeeks.slice(0, 3).reduce((sum, week) => sum + (week.totalContribution ?? 0), 0);
 
   return (
@@ -70,7 +68,7 @@ export function PlayerProfilePage({ profile, profileWindowWeeks, onWindowChange,
         <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
           <MetricCard label="Участие" value={`${fmt(profile.overallParticipationRate)}%`} helper={`Покрытие ${profile.availableHistoryWeeks} КВ, показано ${Math.min(profile.profileWindowWeeks, profile.availableHistoryWeeks || profile.profileWindowWeeks)}`} />
           <MetricCard label="Среднее боев" value={fmt(profile.averageBattlesPerWeek)} helper={`Всего учтено боев ${profile.totalTrackedWarBattles}`} />
-          <MetricCard label="Winrate КВ" value={`${fmt(profile.recentWarWinRate)}%`} helper={`${profile.recentWarWins}-${profile.recentWarLosses} по боевым колодам`} />
+          <MetricCard label="Winrate КВ" value={`${fmt(profile.recentWarWinRate)}%`} helper={`${profile.recentWarWins}-${profile.recentWarLosses} по клановым колодам`} />
           <MetricCard label="Прогноз" value={`${profile.predictedNextWeekBattles}/16`} helper={`${profile.predictedNextWeekContribution} очков в следующем КВ`} />
           <MetricCard label="Сейчас" value={`${profile.currentWeekBattlesPlayed}/16`} helper={`${profile.currentWeekContribution} очков в текущем КВ`} />
         </Stack>
@@ -93,14 +91,6 @@ export function PlayerProfilePage({ profile, profileWindowWeeks, onWindowChange,
               <InsightRow
                 label="Слабая КВ"
                 value={worstWeek ? `${worstWeek.warKey} · ${worstWeek.totalContribution ?? 0} очков` : "нет данных"}
-              />
-              <InsightRow
-                label="Колизей"
-                value={colosseumWeeks.length ? `${colosseumWeeks.length} КВ в выборке` : "нет в выборке"}
-              />
-              <InsightRow
-                label="Речная гонка"
-                value={riverRaceWeeks.length ? `${riverRaceWeeks.length} КВ в выборке` : "нет в выборке"}
               />
               <InsightRow
                 label="Winrate по боям"
@@ -132,8 +122,8 @@ export function PlayerProfilePage({ profile, profileWindowWeeks, onWindowChange,
         <Paper variant="outlined" sx={cardSx}>
           <Typography sx={{ fontWeight: 700, mb: 0.8 }}>Почему такой прогноз</Typography>
           <Typography variant="body2" color="text.secondary">
-            Основа профиля считается по последним {profile.profileWindowWeeks} КВ. Сейчас доступно {profile.availableHistoryWeeks} КВ истории, качество оценки: {profile.dataQualityLabel.toLowerCase()}.
-            Недели с высоким вкладом и большим числом боев получают больший вес, чтобы колизей влиял на прогноз сильнее обычной речной гонки. Winrate по клановым колодам берется из battle log Clash Royale API.
+            Профиль считается по последним {profile.profileWindowWeeks} КВ. Сейчас доступно {profile.availableHistoryWeeks} КВ истории, качество оценки: {profile.dataQualityLabel.toLowerCase()}.
+            Все недели КВ считаются одинаково, без отдельного приоритета для колизея. Winrate по клановым колодам берется из river race log и battle log Clash Royale API.
           </Typography>
         </Paper>
 
@@ -174,7 +164,7 @@ export function PlayerProfilePage({ profile, profileWindowWeeks, onWindowChange,
               <Box key={`${week.warKey}-${week.clanTag}`}>
                 <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={0.4}>
                   <Typography variant="body2" sx={{ fontWeight: 700, overflowWrap: "anywhere" }}>
-                    {week.warKey} • {week.clanName} {week.isColosseumWeighted ? "• приоритет для прогноза" : ""}
+                    {week.warKey} • {week.clanName}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     {week.battlesPlayed}/{week.maxBattles} • {fmt(week.participationRate)}%{week.totalContribution != null ? ` • ${week.totalContribution} очков` : ""}{week.warWinRate != null ? ` • WR ${fmt(week.warWinRate)}%` : ""}
