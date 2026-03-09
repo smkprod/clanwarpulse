@@ -59,6 +59,7 @@ public static class DependencyInjection
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IPlayerLinkRepository, PlayerLinkRepository>();
         services.AddScoped<IReminderRepository, ReminderRepository>();
+        services.AddScoped<IClanWarHistoryRepository, ClanWarHistoryRepository>();
 
         services.AddHttpClient<ClashRoyaleClient>();
         services.AddHttpClient<TelegramBotProfileResolver>();

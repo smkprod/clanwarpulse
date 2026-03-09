@@ -9,6 +9,8 @@ public static class DependencyInjection
         services.AddScoped<Services.ClanSetupService>();
         services.AddScoped<Services.PlayerLinkService>();
         services.AddScoped<Services.ClanStatusService>();
+        services.AddScoped<Services.ClanWarHistoryService>();
+        services.AddScoped<Services.PlayerWarProfileService>();
         services.AddScoped<Services.WarReminderService>();
         return services;
     }

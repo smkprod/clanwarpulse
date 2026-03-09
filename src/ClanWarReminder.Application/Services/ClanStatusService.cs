@@ -8,11 +8,13 @@ public class ClanStatusService
 {
     private readonly IGroupRepository _groups;
     private readonly IClashRoyaleClient _clashRoyale;
+    private readonly ClanWarHistoryService _historyService;
 
-    public ClanStatusService(IGroupRepository groups, IClashRoyaleClient clashRoyale)
+    public ClanStatusService(IGroupRepository groups, IClashRoyaleClient clashRoyale, ClanWarHistoryService historyService)
     {
         _groups = groups;
         _clashRoyale = clashRoyale;
+        _historyService = historyService;
     }
 
     public async Task<GroupStatusResult> GetStatusAsync(
@@ -47,6 +49,8 @@ public class ClanStatusService
             .FirstOrDefault(x => string.Equals(x.ClanTag, clanTag, StringComparison.OrdinalIgnoreCase))
             ?.ClanName
             ?? clanTag;
+
+        await _historyService.CaptureCurrentWeekAsync(clanTag, ownClanName, snapshot, cancellationToken);
 
         return new ClanWarDashboard(
             clanTag,

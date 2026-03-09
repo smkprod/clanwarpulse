@@ -263,12 +263,12 @@ app.MapGet("/miniapp/player/dashboard", async (
 app.MapGet("/miniapp/player/profile", async (
     string playerTag,
     int? windowWeeks,
-    IClashRoyaleClient clashRoyaleClient,
+    PlayerWarProfileService profileService,
     CancellationToken cancellationToken) =>
 {
     try
     {
-        var profile = await clashRoyaleClient.GetPlayerWarProfileAsync(playerTag, windowWeeks ?? 5, cancellationToken);
+        var profile = await profileService.GetProfileAsync(playerTag, windowWeeks ?? 5, cancellationToken);
         return Results.Ok(profile);
     }
     catch (Exception ex) when (TryMapClashRoyaleError(ex, out var message))
@@ -593,6 +593,39 @@ app.MapGet("/debug/clash-royale/auth-check", async (
         reasonPhrase = response.ReasonPhrase,
         diagnosis,
         responsePreview = bodyPreview
+    });
+});
+
+app.MapGet("/debug/telegram/auth-check", async (
+    IConfiguration configuration,
+    IHttpClientFactory httpClientFactory,
+    CancellationToken cancellationToken) =>
+{
+    var botToken = configuration["Telegram:BotToken"]?.Trim()
+        ?? configuration["TELEGRAM_BOT_TOKEN"]?.Trim();
+
+    if (string.IsNullOrWhiteSpace(botToken) ||
+        botToken.Contains("YOUR_TELEGRAM_BOT_TOKEN", StringComparison.OrdinalIgnoreCase) ||
+        (botToken.StartsWith('<') && botToken.EndsWith('>')))
+    {
+        return Results.BadRequest(new { error = "Telegram bot token is not configured." });
+    }
+
+    var client = httpClientFactory.CreateClient();
+    client.Timeout = TimeSpan.FromSeconds(15);
+
+    var getMeResponse = await client.GetAsync($"https://api.telegram.org/bot{botToken}/getMe", cancellationToken);
+    var getMeBody = await getMeResponse.Content.ReadAsStringAsync(cancellationToken);
+
+    var webhookResponse = await client.GetAsync($"https://api.telegram.org/bot{botToken}/getWebhookInfo", cancellationToken);
+    var webhookBody = await webhookResponse.Content.ReadAsStringAsync(cancellationToken);
+
+    return Results.Ok(new
+    {
+        getMeStatusCode = (int)getMeResponse.StatusCode,
+        getMePreview = getMeBody[..Math.Min(getMeBody.Length, 300)],
+        webhookStatusCode = (int)webhookResponse.StatusCode,
+        webhookPreview = webhookBody[..Math.Min(webhookBody.Length, 300)]
     });
 });
 

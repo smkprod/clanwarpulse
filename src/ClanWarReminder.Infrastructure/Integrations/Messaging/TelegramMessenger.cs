@@ -31,7 +31,7 @@ public class TelegramMessenger : IPlatformMessenger
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(_options.BotToken))
+        if (!HasUsableBotToken(_options.BotToken))
         {
             _logger.LogWarning("Telegram bot token is not configured. Message skipped for group {GroupId}.", message.PlatformGroupId);
             return;
@@ -91,6 +91,26 @@ public class TelegramMessenger : IPlatformMessenger
             .Replace("<br />", "\n", StringComparison.OrdinalIgnoreCase);
 
         return System.Text.RegularExpressions.Regex.Replace(plain, "<.*?>", string.Empty);
+    }
+
+    private static bool HasUsableBotToken(string? token)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return false;
+        }
+
+        if (token.Contains("YOUR_TELEGRAM_BOT_TOKEN", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (token.StartsWith('<') && token.EndsWith('>'))
+        {
+            return false;
+        }
+
+        return true;
     }
 
     private sealed record TelegramSendMessageRequest(

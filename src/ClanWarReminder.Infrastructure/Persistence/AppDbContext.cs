@@ -13,6 +13,8 @@ public class AppDbContext : DbContext
     public DbSet<User> Users => Set<User>();
     public DbSet<PlayerLink> PlayerLinks => Set<PlayerLink>();
     public DbSet<Reminder> Reminders => Set<Reminder>();
+    public DbSet<ClanWarWeek> ClanWarWeeks => Set<ClanWarWeek>();
+    public DbSet<ClanWarWeekMember> ClanWarWeekMembers => Set<ClanWarWeekMember>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

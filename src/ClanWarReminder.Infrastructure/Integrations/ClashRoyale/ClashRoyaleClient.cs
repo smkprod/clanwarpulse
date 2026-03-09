@@ -283,9 +283,8 @@ public class ClashRoyaleClient : IClashRoyaleClient
             recentWars);
     }
 
-    public async Task<PlayerWarProfile> GetPlayerWarProfileAsync(string playerTag, int windowWeeks, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<PlayerWarWeekSummary>> GetPlayerRecentWarWeeksAsync(string playerTag, CancellationToken cancellationToken)
     {
-        var profileWindowWeeks = Math.Clamp(windowWeeks, 1, 10);
         var identity = await GetPlayerIdentityAsync(playerTag, cancellationToken);
         var currentRace = await GetCurrentRiverRaceAsync(identity.ClanTag, cancellationToken);
         var currentParticipant = currentRace.Clan.Participants
@@ -375,100 +374,9 @@ public class ClashRoyaleClient : IClashRoyaleClient
             }
         }
 
-        recentWeeks = recentWeeks
+        return recentWeeks
             .OrderByDescending(x => x.StartedAtUtc)
-            .Take(profileWindowWeeks)
             .ToList();
-
-        var trackedWeeks = recentWeeks.Count > 0 ? recentWeeks : new List<PlayerWarWeekSummary>
-        {
-            new(
-                BuildWarKey(currentRace),
-                StartOfWarWeek(DateTimeOffset.UtcNow),
-                StartOfWarWeek(DateTimeOffset.UtcNow).AddDays(4),
-                identity.ClanTag,
-                identity.ClanName,
-                currentWeekContribution >= 1200 || currentWeekBattles >= 8,
-                currentWeekBattles,
-                16,
-                Math.Round((currentWeekBattles / 16d) * 100d, 1),
-                currentWeekBattles >= 16,
-                currentWeekContribution,
-                currentWeekBattles > 0 ? Math.Round(currentWeekContribution / (double)currentWeekBattles, 1) : 0)
-        };
-
-        var averageBattlesPerWeek = Math.Round(trackedWeeks.Average(x => x.BattlesPlayed), 1);
-        var overallParticipationRate = Math.Round(trackedWeeks.Average(x => x.ParticipationRate), 1);
-        var activityScore = BuildActivityScore(trackedWeeks);
-        var hasMeaningfulHistory = trackedWeeks.Any(x => x.BattlesPlayed > 0 || (x.TotalContribution ?? 0) > 0);
-        var activityLabel = !hasMeaningfulHistory
-            ? "Нет данных"
-            : overallParticipationRate >= 40
-                ? "Активный"
-                : activityScore >= 25
-                    ? "Нестабильный"
-                    : "Пассивный";
-        var weightedBattles = trackedWeeks
-            .Select((week, index) => new
-            {
-                week.BattlesPlayed,
-                Weight = BuildPredictionWeight(index, week.IsColosseumWeighted)
-            })
-            .ToList();
-        var weightedContribution = trackedWeeks
-            .Where(x => x.AverageContributionPerBattle.HasValue && x.AverageContributionPerBattle.Value > 0)
-            .Select((week, index) => new
-            {
-                Average = week.AverageContributionPerBattle!.Value,
-                Weight = BuildPredictionWeight(index, week.IsColosseumWeighted)
-            })
-            .ToList();
-        var predictedNextWeekBattles = weightedBattles.Count > 0
-            ? Math.Clamp((int)Math.Round(weightedBattles.Sum(x => x.BattlesPlayed * x.Weight) / weightedBattles.Sum(x => x.Weight), MidpointRounding.AwayFromZero), 0, 16)
-            : Math.Clamp((int)Math.Round(averageBattlesPerWeek, MidpointRounding.AwayFromZero), 0, 16);
-        var perBattleContribution = weightedContribution.Count > 0
-            ? weightedContribution.Sum(x => x.Average * x.Weight) / weightedContribution.Sum(x => x.Weight)
-            : (currentWeekAverage > 0 ? currentWeekAverage : 100d);
-        var predictedNextWeekContribution = (int)Math.Round(predictedNextWeekBattles * perBattleContribution, MidpointRounding.AwayFromZero);
-
-        var recentClans = warEntries
-            .GroupBy(x => NormalizeTag(x.ClanTag))
-            .Select(group => new PlayerRecentClanEntry(
-                group.First().ClanTag,
-                group.First().ClanName,
-                group.Count(),
-                group.Min(x => x.BattleTimeUtc),
-                group.Max(x => x.BattleTimeUtc)))
-            .OrderByDescending(x => x.LastSeenAtUtc)
-            .Take(6)
-            .ToList();
-        var clanHistoryNote = recentClans.Count > 0
-            ? "История кланов собрана по всем доступным записям battle log, которые сейчас отдает Clash Royale API."
-            : "Clash Royale API не вернул доступную историю по кланам для этого игрока.";
-
-        return new PlayerWarProfile(
-            identity.PlayerTag,
-            identity.PlayerName,
-            identity.ClanTag,
-            identity.ClanName,
-            profileWindowWeeks,
-            currentWeekBattles,
-            16,
-            Math.Max(0, 16 - currentWeekBattles),
-            currentWeekContribution,
-            currentWeekAverage,
-            overallParticipationRate,
-            0,
-            trackedWeeks.Sum(x => x.BattlesPlayed),
-            averageBattlesPerWeek,
-            activityScore,
-            activityLabel,
-            predictedNextWeekBattles,
-            predictedNextWeekContribution,
-            trackedWeeks,
-            recentClans,
-            recentClans.Count,
-            clanHistoryNote);
     }
 
     public async Task<IReadOnlyList<ClanWarHistoryEntry>> GetRecentHistoryAsync(string clanTag, CancellationToken cancellationToken)
@@ -660,34 +568,6 @@ public class ClashRoyaleClient : IClashRoyaleClient
         var day = utc.DayOfWeek == DayOfWeek.Sunday ? 7 : (int)utc.DayOfWeek;
         var weekStart = utc.UtcDateTime.Date.AddDays(1 - day);
         return new DateTimeOffset(weekStart, TimeSpan.Zero);
-    }
-
-    private static double BuildPredictionWeight(int index, bool isColosseumWeighted)
-    {
-        var recencyWeight = index switch
-        {
-            0 => 1.8,
-            1 => 1.45,
-            2 => 1.2,
-            3 => 1.0,
-            _ => 0.85
-        };
-
-        return isColosseumWeighted ? recencyWeight * 1.35 : recencyWeight;
-    }
-
-    private static int BuildActivityScore(IReadOnlyList<PlayerWarWeekSummary> trackedWeeks)
-    {
-        if (trackedWeeks.Count == 0)
-        {
-            return 0;
-        }
-
-        var battlesRatio = trackedWeeks.Average(x => x.BattlesPlayed / 16d);
-        var completionRatio = trackedWeeks.Count(x => x.CompletedAllBattles) / (double)trackedWeeks.Count;
-        var activeWeeksRatio = trackedWeeks.Count(x => x.BattlesPlayed >= 2) / (double)trackedWeeks.Count;
-        var score = (battlesRatio * 55d) + (completionRatio * 20d) + (activeWeeksRatio * 25d);
-        return Math.Clamp((int)Math.Round(score, MidpointRounding.AwayFromZero), 0, 100);
     }
 
     private static ClanWarOpponentStatus MapOpponent(RaceClanDto clan)

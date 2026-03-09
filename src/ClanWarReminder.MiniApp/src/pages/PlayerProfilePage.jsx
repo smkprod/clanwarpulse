@@ -46,12 +46,13 @@ export function PlayerProfilePage({ profile, profileWindowWeeks, onWindowChange,
               <InfoChip text={`Статус ${profile.activityLabel}`} color={profile.activityLabel === "Активный" ? "success" : profile.activityLabel === "Нестабильный" ? "warning" : "default"} />
               <InfoChip text={`Рейтинг ${profile.activityScore}/100`} color="primary" />
               <InfoChip text={`Окно ${profile.profileWindowWeeks} КВ`} />
+              <InfoChip text={`Качество ${profile.dataQualityLabel}`} />
             </Stack>
           </Stack>
         </Paper>
 
         <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
-          <MetricCard label="Участие" value={`${fmt(profile.overallParticipationRate)}%`} helper={`Только по последним ${profile.profileWindowWeeks} КВ`} />
+          <MetricCard label="Участие" value={`${fmt(profile.overallParticipationRate)}%`} helper={`Покрытие ${profile.availableHistoryWeeks} КВ, показано ${Math.min(profile.profileWindowWeeks, profile.availableHistoryWeeks || profile.profileWindowWeeks)}`} />
           <MetricCard label="Среднее боев" value={fmt(profile.averageBattlesPerWeek)} helper={`Всего учтено боев ${profile.totalTrackedWarBattles}`} />
           <MetricCard label="Прогноз" value={`${profile.predictedNextWeekBattles}/16`} helper={`${profile.predictedNextWeekContribution} очков в следующем КВ`} />
           <MetricCard label="Сейчас" value={`${profile.currentWeekBattlesPlayed}/16`} helper={`${profile.currentWeekContribution} очков в текущем КВ`} />
@@ -60,14 +61,14 @@ export function PlayerProfilePage({ profile, profileWindowWeeks, onWindowChange,
         <Paper variant="outlined" sx={cardSx}>
           <Typography sx={{ fontWeight: 700, mb: 0.8 }}>Почему такой прогноз</Typography>
           <Typography variant="body2" color="text.secondary">
-            Основа профиля считается по последним {profile.profileWindowWeeks} КВ. Недели с высоким вкладом и большим числом боев получают больший вес,
-            чтобы колизей влиял на прогноз сильнее обычной речной гонки.
+            Основа профиля считается по последним {profile.profileWindowWeeks} КВ. Сейчас доступно {profile.availableHistoryWeeks} КВ истории, качество оценки: {profile.dataQualityLabel.toLowerCase()}.
+            Недели с высоким вкладом и большим числом боев получают больший вес, чтобы колизей влиял на прогноз сильнее обычной речной гонки.
           </Typography>
         </Paper>
 
         <Stack direction={{ xs: "column", lg: "row" }} spacing={1.2}>
           <Paper variant="outlined" sx={{ ...cardSx, flex: 1.2 }}>
-            <Typography sx={{ fontWeight: 700, mb: 0.8 }}>Последние 5 КВ</Typography>
+            <Typography sx={{ fontWeight: 700, mb: 0.8 }}>Последние {profile.profileWindowWeeks} КВ</Typography>
             <TrendChart weeks={profile.recentWeeks ?? []} />
           </Paper>
           <Paper variant="outlined" sx={{ ...cardSx, flex: 1 }}>

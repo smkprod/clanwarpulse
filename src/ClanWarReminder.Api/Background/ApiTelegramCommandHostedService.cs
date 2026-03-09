@@ -43,6 +43,7 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
         }
 
         var http = _httpClientFactory.CreateClient();
+        await EnsurePollingReadyAsync(http, botToken!, stoppingToken);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -335,6 +336,28 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
         return $"https://api.telegram.org/bot{token}/getUpdates?timeout=25{offsetPart}";
     }
 
+    private async Task EnsurePollingReadyAsync(HttpClient http, string token, CancellationToken cancellationToken)
+    {
+        var webhookInfo = await http.GetFromJsonAsync<TelegramWebhookInfoResponse>(
+            $"https://api.telegram.org/bot{token}/getWebhookInfo",
+            cancellationToken: cancellationToken);
+
+        if (webhookInfo?.Ok == true && !string.IsNullOrWhiteSpace(webhookInfo.Result?.Url))
+        {
+            _logger.LogWarning("Telegram webhook {WebhookUrl} is configured. Clearing it so long polling can work.", webhookInfo.Result.Url);
+            await http.GetAsync($"https://api.telegram.org/bot{token}/deleteWebhook?drop_pending_updates=false", cancellationToken);
+        }
+
+        var me = await http.GetFromJsonAsync<TelegramGetMeResponse>(
+            $"https://api.telegram.org/bot{token}/getMe",
+            cancellationToken: cancellationToken);
+
+        if (me?.Ok == true && me.Result is not null)
+        {
+            _logger.LogInformation("Telegram polling is enabled for bot @{BotUsername} ({BotId}).", me.Result.Username, me.Result.Id);
+        }
+    }
+
     private static bool HasUsableBotToken(string? token)
     {
         if (string.IsNullOrWhiteSpace(token))
@@ -418,5 +441,38 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
     {
         [JsonPropertyName("id")]
         public long Id { get; set; }
+    }
+
+    private sealed class TelegramGetMeResponse
+    {
+        [JsonPropertyName("ok")]
+        public bool Ok { get; set; }
+
+        [JsonPropertyName("result")]
+        public TelegramBotDto? Result { get; set; }
+    }
+
+    private sealed class TelegramBotDto
+    {
+        [JsonPropertyName("id")]
+        public long Id { get; set; }
+
+        [JsonPropertyName("username")]
+        public string? Username { get; set; }
+    }
+
+    private sealed class TelegramWebhookInfoResponse
+    {
+        [JsonPropertyName("ok")]
+        public bool Ok { get; set; }
+
+        [JsonPropertyName("result")]
+        public TelegramWebhookInfoDto? Result { get; set; }
+    }
+
+    private sealed class TelegramWebhookInfoDto
+    {
+        [JsonPropertyName("url")]
+        public string? Url { get; set; }
     }
 }

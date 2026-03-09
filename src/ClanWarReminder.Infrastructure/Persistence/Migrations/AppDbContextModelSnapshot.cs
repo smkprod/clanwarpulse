@@ -18,6 +18,89 @@ namespace ClanWarReminder.Infrastructure.Persistence.Migrations
                 .HasAnnotation("ProductVersion", "10.0.2")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
+            modelBuilder.Entity("ClanWarReminder.Domain.Entities.ClanWarWeek", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ClanName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ClanTag")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("EndedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("LastSeenAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("StartedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("WarKey")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClanTag", "WarKey")
+                        .IsUnique();
+
+                    b.ToTable("clan_war_weeks", (string)null);
+                });
+
+            modelBuilder.Entity("ClanWarReminder.Domain.Entities.ClanWarWeekMember", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<double>("AverageContributionPerBattle")
+                        .HasColumnType("double precision");
+
+                    b.Property<int>("BattlesPlayed")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ClanWarWeekId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("LastSeenAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("MaxBattles")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PlayerName")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("PlayerTag")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("TotalContribution")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClanWarWeekId", "PlayerTag")
+                        .IsUnique();
+
+                    b.ToTable("clan_war_week_members", (string)null);
+                });
+
             modelBuilder.Entity("ClanWarReminder.Domain.Entities.Group", b =>
                 {
                     b.Property<Guid>("Id")
@@ -148,6 +231,17 @@ namespace ClanWarReminder.Infrastructure.Persistence.Migrations
                     b.ToTable("users", (string)null);
                 });
 
+            modelBuilder.Entity("ClanWarReminder.Domain.Entities.ClanWarWeekMember", b =>
+                {
+                    b.HasOne("ClanWarReminder.Domain.Entities.ClanWarWeek", "ClanWarWeek")
+                        .WithMany("Members")
+                        .HasForeignKey("ClanWarWeekId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ClanWarWeek");
+                });
+
             modelBuilder.Entity("ClanWarReminder.Domain.Entities.PlayerLink", b =>
                 {
                     b.HasOne("ClanWarReminder.Domain.Entities.Group", "Group")
@@ -184,6 +278,11 @@ namespace ClanWarReminder.Infrastructure.Persistence.Migrations
                     b.Navigation("Group");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("ClanWarReminder.Domain.Entities.ClanWarWeek", b =>
+                {
+                    b.Navigation("Members");
                 });
 
             modelBuilder.Entity("ClanWarReminder.Domain.Entities.Group", b =>

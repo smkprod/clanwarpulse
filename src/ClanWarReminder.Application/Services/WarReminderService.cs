@@ -19,6 +19,7 @@ public class WarReminderService
     private readonly IPlatformMessenger _messenger;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<WarReminderService> _logger;
+    private readonly ClanWarHistoryService _historyService;
 
     public WarReminderService(
         IGroupRepository groups,
@@ -27,7 +28,8 @@ public class WarReminderService
         IClashRoyaleClient clashRoyale,
         IPlatformMessenger messenger,
         IUnitOfWork unitOfWork,
-        ILogger<WarReminderService> logger)
+        ILogger<WarReminderService> logger,
+        ClanWarHistoryService historyService)
     {
         _groups = groups;
         _links = links;
@@ -36,6 +38,7 @@ public class WarReminderService
         _messenger = messenger;
         _unitOfWork = unitOfWork;
         _logger = logger;
+        _historyService = historyService;
     }
 
     public async Task<int> RunAsync(CancellationToken cancellationToken)
@@ -46,6 +49,7 @@ public class WarReminderService
         foreach (var group in groups)
         {
             var snapshot = await _clashRoyale.GetCurrentWarAsync(group.ClanTag, cancellationToken);
+            await _historyService.CaptureCurrentWeekAsync(group.ClanTag, group.ClanTag, snapshot, cancellationToken);
             await LogClanMembershipChangesAsync(group, snapshot, cancellationToken);
             await LogBattleProgressChangesAsync(group, snapshot, cancellationToken);
 

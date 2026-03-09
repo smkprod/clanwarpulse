@@ -116,6 +116,17 @@ public sealed record PlayerRecentClanEntry(
     DateTimeOffset FirstSeenAtUtc,
     DateTimeOffset LastSeenAtUtc);
 
+public sealed record StoredPlayerWarWeek(
+    string WarKey,
+    DateTimeOffset StartedAtUtc,
+    DateTimeOffset EndedAtUtc,
+    string ClanTag,
+    string ClanName,
+    int BattlesPlayed,
+    int MaxBattles,
+    int TotalContribution,
+    double AverageContributionPerBattle);
+
 public sealed record PlayerWarProfile(
     string PlayerTag,
     string PlayerName,
@@ -137,8 +148,10 @@ public sealed record PlayerWarProfile(
     int PredictedNextWeekContribution,
     IReadOnlyList<PlayerWarWeekSummary> RecentWeeks,
     IReadOnlyList<PlayerRecentClanEntry> RecentClans,
+    int AvailableHistoryWeeks,
     int AvailableClanHistoryEntries,
-    string ClanHistoryNote);
+    string ClanHistoryNote,
+    string DataQualityLabel);
 
 public sealed record ReminderMessage(
     PlatformType Platform,
