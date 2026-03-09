@@ -337,6 +337,7 @@ public class ClashRoyaleClient : IClashRoyaleClient
     {
         var identity = await GetPlayerIdentityAsync(playerTag, cancellationToken);
         var currentRace = await GetCurrentRiverRaceAsync(identity.ClanTag, cancellationToken);
+        var riverRaceLog = await GetRiverRaceLogAsync(identity.ClanTag, cancellationToken);
         var currentParticipant = currentRace.Clan.Participants
             .FirstOrDefault(x => string.Equals(NormalizeTag(x.Tag), identity.PlayerTag, StringComparison.OrdinalIgnoreCase));
 
@@ -400,6 +401,61 @@ public class ClashRoyaleClient : IClashRoyaleClient
                     warLosses,
                     warWinRate);
             })
+            .OrderByDescending(x => x.StartedAtUtc)
+            .ToList();
+
+        var raceLogWeeks = riverRaceLog.Items
+            .Select(item =>
+            {
+                var ownStanding = item.Standings.FirstOrDefault(x => string.Equals(NormalizeTag(x.Clan.Tag), identity.ClanTag, StringComparison.OrdinalIgnoreCase));
+                var participant = ownStanding?.Clan.Participants
+                    .FirstOrDefault(x => string.Equals(NormalizeTag(x.Tag), identity.PlayerTag, StringComparison.OrdinalIgnoreCase));
+
+                if (ownStanding is null || participant is null)
+                {
+                    return null;
+                }
+
+                var startedAt = ResolveRaceLogStartedAtUtc(item);
+                var endedAt = startedAt.AddDays(4);
+                var maxBattles = Math.Max(participant.NumberOfBattles, participant.BattlesPlayed);
+                maxBattles = maxBattles > 0 ? maxBattles : 16;
+                var totalContribution = participant.CardsEarned;
+                double? averageContributionPerBattle = participant.BattlesPlayed > 0
+                    ? Math.Round(totalContribution / (double)participant.BattlesPlayed, 1)
+                    : null;
+                double? warWinRate = participant.BattlesPlayed > 0
+                    ? Math.Round(participant.Wins * 100d / participant.BattlesPlayed, 1)
+                    : null;
+
+                return new PlayerWarWeekSummary(
+                    BuildWarKey(item.SeasonId, item.SectionIndex, 0),
+                    startedAt,
+                    endedAt,
+                    NormalizeTag(ownStanding.Clan.Tag),
+                    ownStanding.Clan.Name,
+                    totalContribution >= 1200 || participant.BattlesPlayed >= 8,
+                    participant.BattlesPlayed,
+                    maxBattles,
+                    Math.Round((participant.BattlesPlayed / (double)maxBattles) * 100d, 1),
+                    participant.BattlesPlayed >= maxBattles,
+                    totalContribution,
+                    averageContributionPerBattle,
+                    participant.Wins,
+                    Math.Max(0, participant.BattlesPlayed - participant.Wins),
+                    warWinRate);
+            })
+            .Where(x => x is not null)
+            .Select(x => x!)
+            .ToList();
+
+        recentWeeks = recentWeeks
+            .Concat(raceLogWeeks)
+            .GroupBy(x => BuildMergeKey(x.WarKey, x.ClanTag))
+            .Select(group => group
+                .OrderByDescending(x => x.TotalContribution ?? 0)
+                .ThenByDescending(x => x.BattlesPlayed)
+                .First())
             .OrderByDescending(x => x.StartedAtUtc)
             .ToList();
 
@@ -545,6 +601,9 @@ public class ClashRoyaleClient : IClashRoyaleClient
         return seasonId.Value.ToString();
     }
 
+    private static string BuildMergeKey(string warKey, string clanTag)
+        => $"{warKey}:{NormalizeTag(clanTag)}";
+
     private static string NormalizeTag(string tag)
     {
         var value = tag.Trim().ToUpperInvariant();
@@ -648,6 +707,18 @@ public class ClashRoyaleClient : IClashRoyaleClient
         var weekStart = StartOfWarWeek(battleTimeUtc);
         var week = ISOWeek.GetWeekOfYear(weekStart.UtcDateTime);
         return $"{weekStart.Year}-W{week:00}";
+    }
+
+    private static DateTimeOffset ResolveRaceLogStartedAtUtc(RiverRaceLogItemDto item)
+    {
+        if (TryParseBattleTime(item.CreatedDate, out var createdAtUtc))
+        {
+            return StartOfWarWeek(createdAtUtc);
+        }
+
+        return item.SeasonId is > 0
+            ? StartOfWarWeek(DateTimeOffset.UtcNow)
+            : DateTimeOffset.UtcNow;
     }
 
     private static DateTimeOffset StartOfWarWeek(DateTimeOffset value)
@@ -815,6 +886,9 @@ public class ClashRoyaleClient : IClashRoyaleClient
         [JsonPropertyName("seasonId")]
         public int? SeasonId { get; set; }
 
+        [JsonPropertyName("createdDate")]
+        public string? CreatedDate { get; set; }
+
         [JsonPropertyName("sectionIndex")]
         public int? SectionIndex { get; set; }
 
@@ -847,6 +921,33 @@ public class ClashRoyaleClient : IClashRoyaleClient
 
         [JsonPropertyName("totalClanScore")]
         public int TotalClanScore { get; set; }
+
+        [JsonPropertyName("participants")]
+        public List<RiverRaceLogParticipantDto> Participants { get; set; } = new();
+    }
+
+    private sealed class RiverRaceLogParticipantDto
+    {
+        [JsonPropertyName("tag")]
+        public string Tag { get; set; } = string.Empty;
+
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = string.Empty;
+
+        [JsonPropertyName("cardsEarned")]
+        public int CardsEarned { get; set; }
+
+        [JsonPropertyName("battlesPlayed")]
+        public int BattlesPlayed { get; set; }
+
+        [JsonPropertyName("wins")]
+        public int Wins { get; set; }
+
+        [JsonPropertyName("collectionDayBattlesPlayed")]
+        public int CollectionDayBattlesPlayed { get; set; }
+
+        [JsonPropertyName("numberOfBattles")]
+        public int NumberOfBattles { get; set; }
     }
 
     private sealed class PlayerBattleLogEntryDto
