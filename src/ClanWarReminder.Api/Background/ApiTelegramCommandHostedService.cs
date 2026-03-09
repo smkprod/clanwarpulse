@@ -1,12 +1,8 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json.Serialization;
-using ClanWarReminder.Application.Abstractions.Integrations;
-using ClanWarReminder.Application.Abstractions.Persistence;
-using ClanWarReminder.Application.Models;
-using ClanWarReminder.Application.Services;
-using ClanWarReminder.Domain.Common;
-using ClanWarReminder.Domain.Enums;
+using ClanWarReminder.Api.Telegram;
 using ClanWarReminder.Infrastructure.Options;
 using Microsoft.Extensions.Options;
 
@@ -37,12 +33,19 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
         var botToken = _telegramOptions.BotToken?.Trim();
         if (!HasUsableBotToken(botToken))
         {
-            _logger.LogWarning(
-                "Telegram command polling in API disabled because Telegram bot token is not configured or still has placeholder value.");
+            _logger.LogWarning("Telegram commands in API disabled because bot token is not configured.");
             return;
         }
 
         var http = _httpClientFactory.CreateClient();
+
+        if (TryBuildWebhookUrl(botToken!, out var webhookUrl))
+        {
+            await EnsureWebhookReadyAsync(http, botToken!, webhookUrl, stoppingToken);
+            _logger.LogInformation("Telegram webhook mode enabled: {WebhookUrl}", webhookUrl);
+            return;
+        }
+
         await EnsurePollingReadyAsync(http, botToken!, stoppingToken);
 
         while (!stoppingToken.IsCancellationRequested)
@@ -60,13 +63,14 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
                 foreach (var update in response.Result)
                 {
                     _offset = Math.Max(_offset, update.UpdateId + 1);
-                    var message = update.Message;
-                    if (message is null || string.IsNullOrWhiteSpace(message.Text))
+                    if (update.Message is null || string.IsNullOrWhiteSpace(update.Message.Text))
                     {
                         continue;
                     }
 
-                    await HandleMessageAsync(message, stoppingToken);
+                    using var scope = _scopeFactory.CreateScope();
+                    var processor = scope.ServiceProvider.GetRequiredService<TelegramCommandProcessor>();
+                    await processor.HandleMessageAsync(update.Message, stoppingToken);
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -81,259 +85,43 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
         }
     }
 
-    private async Task HandleMessageAsync(TelegramMessageDto message, CancellationToken cancellationToken)
+    private bool TryBuildWebhookUrl(string token, out string webhookUrl)
     {
-        var text = message.Text!.Trim();
-        if (!text.StartsWith('/'))
+        var configured = _telegramOptions.WebhookUrl?.Trim();
+        if (string.IsNullOrWhiteSpace(configured))
         {
-            return;
+            webhookUrl = string.Empty;
+            return false;
         }
 
-        var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (parts.Length == 0)
+        if (!configured.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+            !configured.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
         {
-            return;
+            configured = $"https://{configured.TrimStart('/')}";
         }
 
-        var command = parts[0].Split('@', 2)[0].ToLowerInvariant();
-        var args = parts.Skip(1).ToArray();
-        var chatId = message.Chat.Id.ToString();
+        var secret = string.IsNullOrWhiteSpace(_telegramOptions.WebhookSecret)
+            ? Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)))[..24].ToLowerInvariant()
+            : _telegramOptions.WebhookSecret.Trim();
 
-        using var scope = _scopeFactory.CreateScope();
-        var messenger = scope.ServiceProvider.GetRequiredService<IPlatformMessenger>();
+        webhookUrl = configured.Contains("/telegram/webhook/", StringComparison.OrdinalIgnoreCase)
+            ? configured
+            : $"{configured.TrimEnd('/')}/telegram/webhook/{secret}";
 
-        switch (command)
-        {
-            case "/start":
-            case "/help":
-                await SendTextAsync(messenger, chatId,
-                    "Команды:\n/setup #CLANTAG\n/link #PLAYERTAG\n/status\n/tagnotplayed\n/help",
-                    cancellationToken);
-                return;
-
-            case "/setup":
-                await HandleSetupAsync(scope.ServiceProvider, messenger, chatId, args, cancellationToken);
-                return;
-
-            case "/status":
-                await HandleStatusAsync(scope.ServiceProvider, messenger, chatId, cancellationToken);
-                return;
-
-            case "/link":
-                await HandleLinkAsync(scope.ServiceProvider, messenger, message, chatId, args, cancellationToken);
-                return;
-
-            case "/tagnotplayed":
-            case "/tag":
-                await HandleTagNotPlayedAsync(scope.ServiceProvider, messenger, chatId, cancellationToken);
-                return;
-
-            default:
-                await SendTextAsync(messenger, chatId, "Неизвестная команда. Используйте /help", cancellationToken);
-                return;
-        }
+        return true;
     }
 
-    private static async Task HandleSetupAsync(
-        IServiceProvider services,
-        IPlatformMessenger messenger,
-        string chatId,
-        string[] args,
-        CancellationToken cancellationToken)
+    private async Task EnsureWebhookReadyAsync(HttpClient http, string token, string webhookUrl, CancellationToken cancellationToken)
     {
-        if (args.Length == 0)
+        var payload = new
         {
-            await SendTextAsync(messenger, chatId, "Использование: /setup #CLANTAG", cancellationToken);
-            return;
-        }
-
-        var setupService = services.GetRequiredService<ClanSetupService>();
-        var group = await setupService.SetupAsync(PlatformType.Telegram, chatId, args[0], cancellationToken);
-
-        await SendTextAsync(
-            messenger,
-            chatId,
-            $"Настройка завершена. Чат {chatId} привязан к клану {group.ClanTag}.",
-            cancellationToken);
-    }
-
-    private static async Task HandleStatusAsync(
-        IServiceProvider services,
-        IPlatformMessenger messenger,
-        string chatId,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            var statusService = services.GetRequiredService<ClanStatusService>();
-            var status = await statusService.GetStatusAsync(PlatformType.Telegram, chatId, cancellationToken);
-            var top = status.NotPlayed
-                .OrderByDescending(x => x.BattlesRemaining)
-                .Take(5)
-                .Select(x => $"{x.PlayerName} ({x.PlayerTag}) осталось {x.BattlesRemaining}");
-
-            var lines = new List<string>
-            {
-                $"Клан {status.ClanTag}",
-                $"Война {status.WarKey}",
-                $"Сыграли: {status.Played.Count}",
-                $"Не сыграли: {status.NotPlayed.Count}"
-            };
-
-            if (status.NotPlayed.Count > 0)
-            {
-                lines.Add("Кто ещё не сыграл:");
-                lines.AddRange(top.Select(x => $"- {x}"));
-            }
-
-            await SendTextAsync(messenger, chatId, string.Join('\n', lines), cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            await SendTextAsync(messenger, chatId, $"Не удалось получить статус: {ex.Message}", cancellationToken);
-        }
-    }
-
-    private static async Task HandleLinkAsync(
-        IServiceProvider services,
-        IPlatformMessenger messenger,
-        TelegramMessageDto message,
-        string chatId,
-        string[] args,
-        CancellationToken cancellationToken)
-    {
-        if (args.Length == 0)
-        {
-            await SendTextAsync(messenger, chatId, "Использование: /link #PLAYERTAG", cancellationToken);
-            return;
-        }
-
-        if (message.From is null || message.From.Id <= 0)
-        {
-            await SendTextAsync(messenger, chatId, "Не удалось определить Telegram-пользователя для этого сообщения.", cancellationToken);
-            return;
-        }
-
-        try
-        {
-            var playerLinkService = services.GetRequiredService<PlayerLinkService>();
-            var link = await playerLinkService.LinkAsync(
-                PlatformType.Telegram,
-                chatId,
-                message.From.Id.ToString(),
-                BuildUserDisplayName(message.From),
-                args[0],
-                cancellationToken);
-
-            await SendTextAsync(messenger, chatId, $"Пользователь {BuildUserDisplayName(message.From)} привязан к тегу {link.PlayerTag}.", cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            await SendTextAsync(messenger, chatId, $"Не удалось выполнить привязку: {ex.Message}", cancellationToken);
-        }
-    }
-
-    private static async Task HandleTagNotPlayedAsync(
-        IServiceProvider services,
-        IPlatformMessenger messenger,
-        string chatId,
-        CancellationToken cancellationToken)
-    {
-        var groups = services.GetRequiredService<IGroupRepository>();
-        var links = services.GetRequiredService<IPlayerLinkRepository>();
-        var statusService = services.GetRequiredService<ClanStatusService>();
-        var group = await groups.GetByPlatformGroupAsync(PlatformType.Telegram, chatId, cancellationToken);
-
-        if (group is null)
-        {
-            await SendTextAsync(messenger, chatId, "Группа не настроена. Сначала используйте /setup #CLANTAG.", cancellationToken);
-            return;
-        }
-
-        var dashboard = await statusService.GetDashboardByClanTagAsync(group.ClanTag, cancellationToken);
-        var notPlayedByTag = dashboard.NotPlayed.ToDictionary(
-            x => TagNormalizer.NormalizeClanOrPlayerTag(x.PlayerTag),
-            x => x,
-            StringComparer.OrdinalIgnoreCase);
-
-        if (notPlayedByTag.Count == 0)
-        {
-            await SendTextAsync(messenger, chatId, "Все игроки уже завершили бои войны кланов.", cancellationToken);
-            return;
-        }
-
-        var groupLinks = await links.GetByGroupAsync(group.Id, cancellationToken);
-        var linkedTargets = groupLinks
-            .Where(x => notPlayedByTag.ContainsKey(TagNormalizer.NormalizeClanOrPlayerTag(x.PlayerTag)))
-            .ToList();
-
-        var linkedTags = linkedTargets
-            .Select(x => TagNormalizer.NormalizeClanOrPlayerTag(x.PlayerTag))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        var unlinkedTargets = dashboard.NotPlayed
-            .Where(x => !linkedTags.Contains(TagNormalizer.NormalizeClanOrPlayerTag(x.PlayerTag)))
-            .ToList();
-
-        var lines = new List<string>
-        {
-            $"Клан {group.ClanTag}: игроки с оставшимися боями ({notPlayedByTag.Count})"
+            url = webhookUrl,
+            allowed_updates = new[] { "message" },
+            drop_pending_updates = false
         };
 
-        if (linkedTargets.Count > 0)
-        {
-            lines.Add("Привязанные игроки:");
-            foreach (var link in linkedTargets)
-            {
-                var normalizedTag = TagNormalizer.NormalizeClanOrPlayerTag(link.PlayerTag);
-                var status = notPlayedByTag[normalizedTag];
-                var displayName = string.IsNullOrWhiteSpace(link.User.DisplayName) ? normalizedTag : link.User.DisplayName;
-                lines.Add($"- {BuildTelegramMention(link.User.PlatformUserId, displayName)} ({normalizedTag}) осталось {status.BattlesRemaining}");
-            }
-        }
-
-        if (unlinkedTargets.Count > 0)
-        {
-            lines.Add("Пока не привязаны в мини-приложении:");
-            foreach (var member in unlinkedTargets)
-            {
-                lines.Add($"- {WebUtility.HtmlEncode(member.PlayerName)} ({WebUtility.HtmlEncode(member.PlayerTag)}) осталось {member.BattlesRemaining}");
-            }
-        }
-
-        await messenger.SendReminderAsync(
-            new ReminderMessage(
-                PlatformType.Telegram,
-                chatId,
-                string.Empty,
-                string.Join('\n', lines),
-                IsHtml: true),
-            cancellationToken);
-    }
-
-    private static async Task SendTextAsync(
-        IPlatformMessenger messenger,
-        string chatId,
-        string text,
-        CancellationToken cancellationToken)
-    {
-        await messenger.SendReminderAsync(
-            new ReminderMessage(PlatformType.Telegram, chatId, string.Empty, text),
-            cancellationToken);
-    }
-
-    private static string BuildTelegramMention(string platformUserId, string displayName)
-    {
-        var safeName = WebUtility.HtmlEncode(displayName);
-        return long.TryParse(platformUserId, out _)
-            ? $"<a href=\"tg://user?id={platformUserId}\">{safeName}</a>"
-            : safeName;
-    }
-
-    private static string BuildGetUpdatesUrl(string token, long offset)
-    {
-        var offsetPart = offset > 0 ? $"&offset={offset}" : string.Empty;
-        return $"https://api.telegram.org/bot{token}/getUpdates?timeout=25{offsetPart}";
+        using var response = await http.PostAsJsonAsync($"https://api.telegram.org/bot{token}/setWebhook", payload, cancellationToken);
+        response.EnsureSuccessStatusCode();
     }
 
     private async Task EnsurePollingReadyAsync(HttpClient http, string token, CancellationToken cancellationToken)
@@ -358,6 +146,12 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
         }
     }
 
+    private static string BuildGetUpdatesUrl(string token, long offset)
+    {
+        var offsetPart = offset > 0 ? $"&offset={offset}" : string.Empty;
+        return $"https://api.telegram.org/bot{token}/getUpdates?timeout=25{offsetPart}";
+    }
+
     private static bool HasUsableBotToken(string? token)
     {
         if (string.IsNullOrWhiteSpace(token))
@@ -378,20 +172,6 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
         return true;
     }
 
-    private static string BuildUserDisplayName(TelegramUserDto user)
-    {
-        if (!string.IsNullOrWhiteSpace(user.Username))
-        {
-            return $"@{user.Username}";
-        }
-
-        var fullName = string.Join(' ', new[] { user.FirstName, user.LastName }
-            .Where(x => !string.IsNullOrWhiteSpace(x)))
-            .Trim();
-
-        return string.IsNullOrWhiteSpace(fullName) ? user.Id.ToString() : fullName;
-    }
-
     private sealed class GetUpdatesResponse
     {
         [JsonPropertyName("ok")]
@@ -407,40 +187,7 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
         public long UpdateId { get; set; }
 
         [JsonPropertyName("message")]
-        public TelegramMessageDto? Message { get; set; }
-    }
-
-    private sealed class TelegramMessageDto
-    {
-        [JsonPropertyName("text")]
-        public string? Text { get; set; }
-
-        [JsonPropertyName("from")]
-        public TelegramUserDto? From { get; set; }
-
-        [JsonPropertyName("chat")]
-        public TelegramChatDto Chat { get; set; } = new();
-    }
-
-    private sealed class TelegramUserDto
-    {
-        [JsonPropertyName("id")]
-        public long Id { get; set; }
-
-        [JsonPropertyName("username")]
-        public string? Username { get; set; }
-
-        [JsonPropertyName("first_name")]
-        public string? FirstName { get; set; }
-
-        [JsonPropertyName("last_name")]
-        public string? LastName { get; set; }
-    }
-
-    private sealed class TelegramChatDto
-    {
-        [JsonPropertyName("id")]
-        public long Id { get; set; }
+        public TelegramInboundMessage? Message { get; set; }
     }
 
     private sealed class TelegramGetMeResponse

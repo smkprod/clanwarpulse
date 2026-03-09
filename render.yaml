@@ -26,6 +26,10 @@ services:
         sync: false
       - key: Telegram__BotUsername
         sync: false
+      - key: Telegram__WebhookUrl
+        sync: false
+      - key: Telegram__WebhookSecret
+        sync: false
       - key: Telegram__MaxAuthAgeMinutes
         value: "60"
       - key: Worker__PollMinutes

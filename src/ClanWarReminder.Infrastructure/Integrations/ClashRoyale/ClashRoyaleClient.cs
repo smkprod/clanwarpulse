@@ -23,40 +23,69 @@ public class ClashRoyaleClient : IClashRoyaleClient
     public async Task<ClanWarSnapshot> GetCurrentWarAsync(string clanTag, CancellationToken cancellationToken)
     {
         var payload = await GetCurrentRiverRaceAsync(clanTag, cancellationToken);
+        var clanMembers = await GetClanMembersAsync(clanTag, cancellationToken);
         const int maxBattlesPerDay = 4;
+        var participantByTag = payload.Clan.Participants
+            .ToDictionary(x => NormalizeTag(x.Tag), StringComparer.OrdinalIgnoreCase);
 
-        var members = payload.Clan.Participants.Select(x =>
+        var members = clanMembers.Select(member =>
         {
-            // Clash Royale payload fields vary by race state; use best available signal.
-            var playedBattles = Math.Max(
-                Math.Max(x.BattlesPlayed, x.DecksUsedToday),
-                Math.Max(x.DecksUsed, x.BoatAttacks));
+            participantByTag.TryGetValue(NormalizeTag(member.Tag), out var x);
 
-            if (playedBattles == 0 && x.PeriodPoints > 0)
+            // Clash Royale payload fields vary by race state; use best available signal.
+            var playedBattles = x is null
+                ? 0
+                : Math.Max(
+                    Math.Max(x.BattlesPlayed, x.DecksUsedToday),
+                    Math.Max(x.DecksUsed, x.BoatAttacks));
+
+            if (x is not null && playedBattles == 0 && x.PeriodPoints > 0)
             {
                 // periodPoints represents today's points in the race window.
                 playedBattles = Math.Clamp((int)Math.Ceiling(x.PeriodPoints / 100.0), 1, maxBattlesPerDay);
             }
 
-            if (playedBattles == 0 && (x.Fame > 0 || x.RepairPoints > 0))
+            if (x is not null && playedBattles == 0 && (x.Fame > 0 || x.RepairPoints > 0))
             {
                 playedBattles = 1;
             }
 
-            var totalContribution = x.Fame + x.RepairPoints;
+            var totalContribution = x is null ? 0 : x.Fame + x.RepairPoints;
             var averageContribution = playedBattles > 0
                 ? Math.Round(totalContribution / (double)playedBattles, 1)
                 : 0;
 
             return new ClanWarMemberStatus(
-                x.Tag,
-                x.Name,
+                NormalizeTag(member.Tag),
+                member.Name,
                 playedBattles > 0,
                 playedBattles,
-                Math.Max(0, maxBattlesPerDay - playedBattles),
+                Math.Max(0, 16 - playedBattles),
                 totalContribution,
                 averageContribution);
-        }).ToList();
+        })
+        .Union(payload.Clan.Participants
+            .Where(x => !clanMembers.Any(member => string.Equals(NormalizeTag(member.Tag), NormalizeTag(x.Tag), StringComparison.OrdinalIgnoreCase)))
+            .Select(x =>
+            {
+                var playedBattles = ResolvePlayedBattles(x);
+                var totalContribution = x.Fame + x.RepairPoints;
+                var averageContribution = playedBattles > 0
+                    ? Math.Round(totalContribution / (double)playedBattles, 1)
+                    : 0;
+
+                return new ClanWarMemberStatus(
+                    NormalizeTag(x.Tag),
+                    x.Name,
+                    playedBattles > 0,
+                    playedBattles,
+                    Math.Max(0, 16 - playedBattles),
+                    totalContribution,
+                    averageContribution);
+            }))
+        .OrderByDescending(x => x.BattlesPlayed)
+        .ThenBy(x => x.PlayerName)
+        .ToList();
 
         return new ClanWarSnapshot(BuildWarKey(payload), members);
     }
@@ -442,6 +471,19 @@ public class ClashRoyaleClient : IClashRoyaleClient
             ?? new List<PlayerBattleLogEntryDto>();
     }
 
+    private async Task<List<ClanMemberDto>> GetClanMembersAsync(string clanTag, CancellationToken cancellationToken)
+    {
+        var encodedTag = Uri.EscapeDataString(NormalizeTag(clanTag));
+        using var request = CreateRequest(HttpMethod.Get, $"{_options.BaseUrl}/clans/{encodedTag}/members");
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var payload = await response.Content.ReadFromJsonAsync<ClanMembersResponse>(cancellationToken: cancellationToken)
+            ?? throw new InvalidOperationException("Clash Royale API returned empty clan members payload.");
+
+        return payload.Items;
+    }
+
     private HttpRequestMessage CreateRequest(HttpMethod method, string url)
     {
         var request = new HttpRequestMessage(method, url);
@@ -690,6 +732,21 @@ public class ClashRoyaleClient : IClashRoyaleClient
 
         [JsonPropertyName("repairPoints")]
         public int RepairPoints { get; set; }
+    }
+
+    private sealed class ClanMembersResponse
+    {
+        [JsonPropertyName("items")]
+        public List<ClanMemberDto> Items { get; set; } = new();
+    }
+
+    private sealed class ClanMemberDto
+    {
+        [JsonPropertyName("tag")]
+        public string Tag { get; set; } = string.Empty;
+
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = string.Empty;
     }
 
     private sealed class RiverRaceLogResponse

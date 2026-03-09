@@ -4,6 +4,7 @@ using ClanWarReminder.Application.Abstractions.Persistence;
 using ClanWarReminder.Application.Models;
 using ClanWarReminder.Api.Auth;
 using ClanWarReminder.Api.Background;
+using ClanWarReminder.Api.Telegram;
 using ClanWarReminder.Application.Services;
 using ClanWarReminder.Domain.Common;
 using ClanWarReminder.Domain.Enums;
@@ -12,6 +13,8 @@ using ClanWarReminder.Infrastructure.Integrations.Telegram;
 using ClanWarReminder.Infrastructure.Persistence;
 using System.Text.Json.Serialization;
 using System.Net;
+using System.Security.Cryptography;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -32,6 +35,7 @@ builder.Services.AddCors(options =>
             .AllowAnyHeader());
 });
 builder.Services.AddSingleton<AuthorizedPlayerRegistry>();
+builder.Services.AddScoped<TelegramCommandProcessor>();
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
@@ -129,6 +133,35 @@ app.MapPost("/miniapp/auth/telegram", (
         identity.DisplayName,
         identity.Username,
         identity.AuthDateUtc));
+});
+
+app.MapPost("/telegram/webhook/{secret}", async (
+    string secret,
+    TelegramUpdate update,
+    IConfiguration configuration,
+    TelegramCommandProcessor commandProcessor,
+    CancellationToken cancellationToken) =>
+{
+    var botToken = configuration["Telegram:BotToken"]?.Trim()
+        ?? configuration["TELEGRAM_BOT_TOKEN"]?.Trim();
+    var configuredSecret = configuration["Telegram:WebhookSecret"]?.Trim()
+        ?? configuration["TELEGRAM_WEBHOOK_SECRET"]?.Trim();
+    configuredSecret = string.IsNullOrWhiteSpace(configuredSecret) && !string.IsNullOrWhiteSpace(botToken)
+        ? Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(botToken)))[..24].ToLowerInvariant()
+        : configuredSecret;
+
+    if (!string.IsNullOrWhiteSpace(configuredSecret) &&
+        !string.Equals(secret, configuredSecret, StringComparison.Ordinal))
+    {
+        return Results.Unauthorized();
+    }
+
+    if (update.Message is not null)
+    {
+        await commandProcessor.HandleMessageAsync(update.Message, cancellationToken);
+    }
+
+    return Results.Ok(new { ok = true });
 });
 
 app.MapPost("/miniapp/auth/player", async (

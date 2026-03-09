@@ -48,6 +48,18 @@ public static class DependencyInjection
                 configuration["Telegram:BotUsername"],
                 configuration["TELEGRAM_BOT_USERNAME"],
                 GetDotEnv(dotEnv, "TELEGRAM_BOT_USERNAME"));
+            options.WebhookUrl = ResolveString(
+                options.WebhookUrl,
+                configuration["Telegram:WebhookUrl"],
+                configuration["TELEGRAM_WEBHOOK_URL"],
+                configuration["RENDER_EXTERNAL_URL"],
+                GetDotEnv(dotEnv, "TELEGRAM_WEBHOOK_URL"),
+                GetDotEnv(dotEnv, "RENDER_EXTERNAL_URL"));
+            options.WebhookSecret = ResolveString(
+                options.WebhookSecret,
+                configuration["Telegram:WebhookSecret"],
+                configuration["TELEGRAM_WEBHOOK_SECRET"],
+                GetDotEnv(dotEnv, "TELEGRAM_WEBHOOK_SECRET"));
         });
 
         var connectionString = ResolveConnectionString(configuration, dotEnv);
