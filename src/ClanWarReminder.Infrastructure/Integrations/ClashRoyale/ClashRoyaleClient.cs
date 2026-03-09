@@ -60,15 +60,15 @@ public class ClashRoyaleClient : IClashRoyaleClient
                 member.Name,
                 playedBattles > 0,
                 playedBattles,
-                Math.Max(0, 16 - playedBattles),
+                Math.Max(0, maxBattlesPerDay - playedBattles),
                 totalContribution,
                 averageContribution);
         })
-        .Union(payload.Clan.Participants
-            .Where(x => !clanMembers.Any(member => string.Equals(NormalizeTag(member.Tag), NormalizeTag(x.Tag), StringComparison.OrdinalIgnoreCase)))
+        .Concat(payload.Clan.Participants
+            .Where(x => !participantByTag.ContainsKey(NormalizeTag(x.Tag)) || !clanMembers.Any(member => string.Equals(NormalizeTag(member.Tag), NormalizeTag(x.Tag), StringComparison.OrdinalIgnoreCase)))
             .Select(x =>
             {
-                var playedBattles = ResolvePlayedBattles(x);
+                var playedBattles = ResolveCurrentDayBattles(x, maxBattlesPerDay);
                 var totalContribution = x.Fame + x.RepairPoints;
                 var averageContribution = playedBattles > 0
                     ? Math.Round(totalContribution / (double)playedBattles, 1)
@@ -79,10 +79,15 @@ public class ClashRoyaleClient : IClashRoyaleClient
                     x.Name,
                     playedBattles > 0,
                     playedBattles,
-                    Math.Max(0, 16 - playedBattles),
+                    Math.Max(0, maxBattlesPerDay - playedBattles),
                     totalContribution,
                     averageContribution);
             }))
+        .GroupBy(x => NormalizeTag(x.PlayerTag), StringComparer.OrdinalIgnoreCase)
+        .Select(group => group
+            .OrderByDescending(x => x.HasPlayed)
+            .ThenByDescending(x => x.BattlesPlayed)
+            .First())
         .OrderByDescending(x => x.BattlesPlayed)
         .ThenBy(x => x.PlayerName)
         .ToList();
@@ -521,13 +526,18 @@ public class ClashRoyaleClient : IClashRoyaleClient
 
     private static int ResolvePlayedBattles(ParticipantDto participant)
     {
+        return ResolveCurrentDayBattles(participant, 16);
+    }
+
+    private static int ResolveCurrentDayBattles(ParticipantDto participant, int maxBattles)
+    {
         var playedBattles = Math.Max(
             Math.Max(participant.BattlesPlayed, participant.DecksUsedToday),
             Math.Max(participant.DecksUsed, participant.BoatAttacks));
 
         if (playedBattles == 0 && participant.PeriodPoints > 0)
         {
-            playedBattles = Math.Clamp((int)Math.Ceiling(participant.PeriodPoints / 100.0), 1, 16);
+            playedBattles = Math.Clamp((int)Math.Ceiling(participant.PeriodPoints / 100.0), 1, maxBattles);
         }
 
         if (playedBattles == 0 && (participant.Fame > 0 || participant.RepairPoints > 0))
