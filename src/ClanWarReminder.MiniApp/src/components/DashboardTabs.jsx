@@ -130,7 +130,7 @@ function ActivityTab({ dashboard, authorizedTags, onOpenPlayerProfile, busy }) {
         <Paper variant="outlined" sx={cardSx}>
           <Typography sx={{ fontWeight: 700, mb: 0.4 }}>КВ сейчас не идет</Typography>
           <Typography variant="body2" color="text.secondary">
-            Тренировочные дни не считаются. Боевые списки и статистика появятся только в окне с четверга до утра понедельника.
+            Тренировочные дни не считаются. Боевые списки и статистика появляются только в окне с четверга до утра понедельника.
           </Typography>
         </Paper>
       )}
@@ -183,23 +183,36 @@ function ActivityTab({ dashboard, authorizedTags, onOpenPlayerProfile, busy }) {
       <Paper variant="outlined" sx={cardSx}>
         <Typography sx={{ fontWeight: 700, mb: 0.8 }}>Все игроки клана</Typography>
         {allMembers.length ? (
-          <Stack spacing={0.75} sx={{ maxHeight: 420, overflowY: "auto" }}>
-            {allMembers.map((member) => {
+          <Stack spacing={0} sx={{ maxHeight: 420, overflowY: "auto" }}>
+            {allMembers.map((member, index) => {
               const isAuthorized = authorizedSet.has(normalizeTag(member.playerTag));
               return (
-                <Paper key={`all-${member.playerTag}`} variant="outlined" sx={miniListCardSx}>
-                  <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={0.4}>
-                    <Button variant="text" disabled={busy} onClick={() => onOpenPlayerProfile(member.playerTag)} sx={textButtonSx}>
-                      {member.playerName} {isAuthorized ? "[авторизован]" : ""}
-                    </Button>
-                    <Typography variant="body2" color="text.secondary">
-                      {member.battlesPlayed ?? 0}/4
-                    </Typography>
-                  </Stack>
-                  <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
-                    {member.playerTag} | очки {member.totalContribution ?? 0} | осталось {member.battlesRemaining ?? 0}
-                  </Typography>
-                </Paper>
+                <Box key={`all-${member.playerTag}`}>
+                  <Button
+                    variant="text"
+                    disabled={busy}
+                    onClick={() => onOpenPlayerProfile(member.playerTag)}
+                    sx={{
+                      width: "100%",
+                      px: 0,
+                      py: 1,
+                      justifyContent: "flex-start",
+                      alignItems: "flex-start",
+                      textTransform: "none",
+                      borderRadius: 0
+                    }}
+                  >
+                    <Stack spacing={0.15} sx={{ alignItems: "flex-start" }}>
+                      <Typography sx={{ fontWeight: 700, color: "#f5fbff", textAlign: "left" }}>
+                        {member.playerName} {isAuthorized ? "[авторизован]" : ""}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere", textAlign: "left" }}>
+                        {member.playerTag}
+                      </Typography>
+                    </Stack>
+                  </Button>
+                  {index < allMembers.length - 1 ? <Divider sx={{ borderColor: "rgba(132,186,217,0.12)" }} /> : null}
+                </Box>
               );
             })}
           </Stack>
@@ -316,7 +329,7 @@ function HistoryTab({ dashboard }) {
   const history = dashboard.history ?? [];
 
   if (!history.length) {
-    return <Typography color="text.secondary">История пока недоступна.</Typography>;
+    return <Typography color="text.secondary">История пока не доступна.</Typography>;
   }
 
   return (
@@ -350,7 +363,7 @@ function ClansTab({ dashboard, selectedClanTag, clanDetails, onLoadClanDetails }
   const clans = dashboard.currentRaceClans ?? [];
 
   if (!clans.length) {
-    return <Typography color="text.secondary">Кланы текущей гонки пока недоступны.</Typography>;
+    return <Typography color="text.secondary">Кланы текущей гонки пока не доступны.</Typography>;
   }
 
   return (
@@ -554,7 +567,9 @@ function InfoChip({ text, color }) {
 }
 
 function sumMembers(dashboard) {
-  const members = [...(dashboard.played ?? []), ...(dashboard.notPlayed ?? [])];
+  const members = dashboard.allMembers?.length
+    ? dashboard.allMembers
+    : [...(dashboard.played ?? []), ...(dashboard.notPlayed ?? [])];
   return members.reduce((sum, member) => sum + (member.totalContribution ?? 0), 0);
 }
 
