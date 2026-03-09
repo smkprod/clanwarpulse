@@ -41,12 +41,27 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
 
         if (TryBuildWebhookUrl(botToken!, out var webhookUrl))
         {
-            await EnsureWebhookReadyAsync(http, botToken!, webhookUrl, stoppingToken);
-            _logger.LogInformation("Telegram webhook mode enabled: {WebhookUrl}", webhookUrl);
-            return;
+            try
+            {
+                await EnsureWebhookReadyAsync(http, botToken!, webhookUrl, stoppingToken);
+                _logger.LogInformation("Telegram webhook mode enabled: {WebhookUrl}", webhookUrl);
+                return;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Telegram webhook setup failed. Falling back to polling mode.");
+            }
         }
 
-        await EnsurePollingReadyAsync(http, botToken!, stoppingToken);
+        try
+        {
+            await EnsurePollingReadyAsync(http, botToken!, stoppingToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Telegram polling initialization failed. Telegram bot will stay disabled, API will continue running.");
+            return;
+        }
 
         while (!stoppingToken.IsCancellationRequested)
         {
