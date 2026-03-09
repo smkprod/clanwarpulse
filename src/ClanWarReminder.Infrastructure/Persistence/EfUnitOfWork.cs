@@ -13,4 +13,7 @@ public class EfUnitOfWork : IUnitOfWork
 
     public Task<int> SaveChangesAsync(CancellationToken cancellationToken)
         => _dbContext.SaveChangesAsync(cancellationToken);
+
+    public void ClearChanges()
+        => _dbContext.ChangeTracker.Clear();
 }
