@@ -36,26 +36,26 @@ export function DashboardTabs({
     <Paper elevation={0} sx={{ p: 1.6, border: "1px solid rgba(132,186,217,0.2)", backdropFilter: "blur(6px)", overflow: "hidden" }}>
       <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={1.2} alignItems={{ sm: "center" }}>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ minWidth: 0 }}>
-          <InfoChip text={`Nick ${identity.playerName}`} />
-          <InfoChip text={`Clan ${identity.clanName}`} color="primary" />
-          <InfoChip text={`War ${dashboard.warKey}`} color="secondary" />
+          <InfoChip text={`Игрок ${identity.playerName}`} />
+          <InfoChip text={`Клан ${identity.clanName}`} color="primary" />
+          <InfoChip text={`Война ${dashboard.warKey}`} color="secondary" />
         </Stack>
         <Stack direction="row" spacing={1}>
-          <Button variant="outlined" onClick={onRefresh} disabled={busy}>Refresh</Button>
+          <Button variant="outlined" onClick={onRefresh} disabled={busy}>Обновить</Button>
           <Button variant="outlined" color="warning" onClick={onNotifyNotPlayed} disabled={busy || !canNotifyNotPlayed}>
-            Tag Not Played
+            Отметить не сыгравших
           </Button>
-          {hasBotLink && <Button variant="contained" color="secondary" onClick={onOpenBot}>Open Bot</Button>}
+          {hasBotLink && <Button variant="contained" color="secondary" onClick={onOpenBot}>Открыть бота</Button>}
         </Stack>
       </Stack>
 
       <Tabs value={tab} onChange={(_, value) => onTabChange(value)} sx={{ mt: 1.5, mb: 1.5 }} variant="scrollable" scrollButtons="auto">
-        <Tab label="Activity" />
-        <Tab label="Opponents" />
-        <Tab label="Forecast" />
-        <Tab label="History" />
-        <Tab label="Clans" />
-        <Tab label="Telegram Sync" />
+        <Tab label="Активность" />
+        <Tab label="Соперники" />
+        <Tab label="Прогноз" />
+        <Tab label="История" />
+        <Tab label="Кланы" />
+        <Tab label="Синхронизация Telegram" />
       </Tabs>
       <Divider sx={{ mb: 1.5, borderColor: "rgba(132,186,217,0.18)" }} />
 
@@ -102,11 +102,11 @@ function ActivityTab({ dashboard, authorizedTags }) {
   return (
     <Stack spacing={1.2}>
       <Typography variant="body2" sx={{ color: "#9ec2da" }}>
-        Battles remaining in your clan: {totalRemaining}
+        Осталось боёв в вашем клане: {totalRemaining}
       </Typography>
       <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
-        <ScrollList title="Played clan war" members={dashboard.played} emptyText="Nobody played yet." authorizedSet={authorizedSet} />
-        <ScrollList title="Not played clan war" members={dashboard.notPlayed} emptyText="Everyone has played." authorizedSet={authorizedSet} />
+        <ScrollList title="Сыграли войну кланов" members={dashboard.played} emptyText="Пока никто не сыграл." authorizedSet={authorizedSet} />
+        <ScrollList title="Не сыграли войну кланов" members={dashboard.notPlayed} emptyText="Все уже сыграли." authorizedSet={authorizedSet} />
       </Stack>
     </Stack>
   );
@@ -120,13 +120,13 @@ function OpponentsTab({ dashboard, identity }) {
   const maxScore = raceClans.length ? Math.max(...raceClans.map((x) => x.totalScore), 1) : 1;
 
   if (!raceClans.length) {
-    return <Typography color="text.secondary">Opponents data is not available yet.</Typography>;
+    return <Typography color="text.secondary">Данные по соперникам пока недоступны.</Typography>;
   }
 
   return (
     <Stack spacing={1.2}>
       <Paper variant="outlined" sx={{ p: 1.2, borderColor: "rgba(132,186,217,0.2)", bgcolor: "rgba(6,17,27,0.6)", overflow: "hidden" }}>
-        <Typography sx={{ fontWeight: 700, mb: 0.8 }}>Current River Race Situation</Typography>
+        <Typography sx={{ fontWeight: 700, mb: 0.8 }}>Текущая ситуация в речной гонке</Typography>
         <Stack spacing={0.8}>
           {raceClans.map((clan, index) => {
             const isOwnClan = normalizeTag(clan.clanTag) === normalizeTag(dashboard.clanTag);
@@ -134,10 +134,10 @@ function OpponentsTab({ dashboard, identity }) {
               <Box key={`race-${clan.clanTag}`}>
                 <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={0.4}>
                   <Typography variant="body2" sx={{ fontWeight: isOwnClan ? 800 : 600, overflowWrap: "anywhere" }}>
-                    {index + 1}. {clan.clanName}{isOwnClan ? ` (your clan: ${identity.clanName})` : ""}
+                    {index + 1}. {clan.clanName}{isOwnClan ? ` (ваш клан: ${identity.clanName})` : ""}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    now {clan.periodPoints ?? 0} | total {clan.totalScore}
+                    сейчас {clan.periodPoints ?? 0} | всего {clan.totalScore}
                   </Typography>
                 </Stack>
                 <LinearProgress
@@ -152,7 +152,7 @@ function OpponentsTab({ dashboard, identity }) {
       </Paper>
 
       <Typography variant="body2" sx={{ color: "#9ec2da" }}>
-        Opponents in current race
+        Соперники в текущей гонке
       </Typography>
       {opponents.map((opponent) => (
         <Paper key={opponent.clanTag} variant="outlined" sx={{ p: 1.2, borderColor: "rgba(132,186,217,0.2)", bgcolor: "rgba(6,17,27,0.6)", overflow: "hidden" }}>
@@ -161,11 +161,11 @@ function OpponentsTab({ dashboard, identity }) {
             <Typography color="text.secondary" sx={{ overflowWrap: "anywhere" }}>{opponent.clanTag}</Typography>
           </Stack>
           <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap" }} useFlexGap>
-            <Chip size="small" label={`Score ${opponent.totalScore}`} />
-            <Chip size="small" color="secondary" label={`Now ${opponent.periodPoints ?? 0}`} />
-            <Chip size="small" label={`Fame ${opponent.fame}`} />
-            <Chip size="small" label={`Repair ${opponent.repairPoints}`} />
-            <Chip size="small" label={`Players ${opponent.participantsCount}`} />
+            <Chip size="small" label={`Счёт ${opponent.totalScore}`} />
+            <Chip size="small" color="secondary" label={`Сейчас ${opponent.periodPoints ?? 0}`} />
+            <Chip size="small" label={`Слава ${opponent.fame}`} />
+            <Chip size="small" label={`Починка ${opponent.repairPoints}`} />
+            <Chip size="small" label={`Игроков ${opponent.participantsCount}`} />
           </Stack>
         </Paper>
       ))}
@@ -196,13 +196,13 @@ function ForecastTab({ dashboard }) {
   const maxForecast = ranking.length ? Math.max(...ranking.map((item) => item.predictedScore), 1) : 1;
 
   if (!ranking.length) {
-    return <Typography color="text.secondary">Not enough data for forecast yet.</Typography>;
+    return <Typography color="text.secondary">Для прогноза пока недостаточно данных.</Typography>;
   }
 
   return (
     <Stack spacing={1}>
       <Typography variant="body2" sx={{ color: "#9ec2da" }}>
-        Model {(dashboard.forecast?.basis ?? "Current race score")} | only clans from current race
+        Модель: {dashboard.forecast?.basis ?? "Текущий счёт гонки"} | только кланы из текущей гонки
       </Typography>
       {ranking.map((item, index) => (
         <Paper key={item.clanTag} variant="outlined" sx={{ p: 1.2, borderColor: "rgba(132,186,217,0.2)", bgcolor: "rgba(6,17,27,0.6)", overflow: "hidden" }}>
@@ -211,10 +211,10 @@ function ForecastTab({ dashboard }) {
             <Typography color="text.secondary" sx={{ overflowWrap: "anywhere" }}>{item.clanTag}</Typography>
           </Stack>
           <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap" }} useFlexGap>
-            <Chip size="small" color="primary" label={`Forecast ${item.predictedScore}`} />
-            <Chip size="small" label={`Avg score ${item.recentAverageScore}`} />
-            <Chip size="small" label={`Avg rank ${item.recentAverageRank}`} />
-            <Chip size="small" label={`Matches ${item.sampleSize}`} />
+            <Chip size="small" color="primary" label={`Прогноз ${item.predictedScore}`} />
+            <Chip size="small" label={`Средний счёт ${item.recentAverageScore}`} />
+            <Chip size="small" label={`Среднее место ${item.recentAverageRank}`} />
+            <Chip size="small" label={`Матчей ${item.sampleSize}`} />
           </Stack>
           <Box sx={{ mt: 1.2 }}>
             <LinearProgress
@@ -233,7 +233,7 @@ function HistoryTab({ dashboard }) {
   const history = dashboard.history ?? [];
 
   if (!history.length) {
-    return <Typography color="text.secondary">History is not available yet.</Typography>;
+    return <Typography color="text.secondary">История пока недоступна.</Typography>;
   }
 
   return (
@@ -269,13 +269,13 @@ function ClansTab({ dashboard, selectedClanTag, clanDetails, onLoadClanDetails }
   const clans = dashboard.currentRaceClans ?? [];
 
   if (!clans.length) {
-    return <Typography color="text.secondary">Current race clans are not available.</Typography>;
+    return <Typography color="text.secondary">Кланы текущей гонки пока недоступны.</Typography>;
   }
 
   return (
     <Stack spacing={1.2}>
       <Typography variant="body2" sx={{ color: "#9ec2da" }}>
-        Pick a clan to see detailed stats: top contributors and past wars.
+        Выберите клан, чтобы посмотреть подробную статистику: лучших участников и прошлые войны.
       </Typography>
 
       <Stack spacing={0.8}>
@@ -284,14 +284,14 @@ function ClansTab({ dashboard, selectedClanTag, clanDetails, onLoadClanDetails }
             <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={0.8} alignItems={{ sm: "center" }}>
               <Box sx={{ minWidth: 0 }}>
                 <Typography sx={{ fontWeight: 700, overflowWrap: "anywhere" }}>{clan.clanName}</Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>{clan.clanTag} | score {clan.totalScore}</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>{clan.clanTag} | счёт {clan.totalScore}</Typography>
               </Box>
               <Button
                 size="small"
                 variant={selectedClanTag === clan.clanTag ? "contained" : "outlined"}
                 onClick={() => onLoadClanDetails(clan.clanTag)}
               >
-                Details
+                Подробнее
               </Button>
             </Stack>
           </Paper>
@@ -315,10 +315,10 @@ function ClanDetailsCard({ details }) {
     <Paper variant="outlined" sx={{ p: 1.2, borderColor: "rgba(132,186,217,0.2)", bgcolor: "rgba(6,17,27,0.6)", overflow: "hidden" }}>
       <Typography sx={{ fontWeight: 800, overflowWrap: "anywhere" }}>{details.clanName}</Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1, overflowWrap: "anywhere" }}>
-        {details.clanTag} | current score {details.currentScore} | avg recent {details.averageRecentScore}
+        {details.clanTag} | текущий счёт {details.currentScore} | средний недавний {details.averageRecentScore}
       </Typography>
 
-      <Typography sx={{ fontWeight: 700, mb: 0.6 }}>Top contributors (current race)</Typography>
+      <Typography sx={{ fontWeight: 700, mb: 0.6 }}>Лучшие участники текущей гонки</Typography>
       <Stack spacing={0.8} sx={{ mb: 1.2 }}>
         {(details.topContributors ?? []).slice(0, 10).map((row, idx) => (
           <Box key={row.playerTag}>
@@ -335,13 +335,13 @@ function ClanDetailsCard({ details }) {
         ))}
       </Stack>
 
-      <Typography sx={{ fontWeight: 700, mb: 0.6 }}>Past clan wars</Typography>
+      <Typography sx={{ fontWeight: 700, mb: 0.6 }}>Прошлые войны кланов</Typography>
       <Stack spacing={0.8}>
         {(details.recentWars ?? []).map((war) => (
           <Box key={`${details.clanTag}-${war.warKey}`}>
             <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={0.4}>
               <Typography variant="body2">{war.warKey}</Typography>
-              <Typography variant="body2" color="text.secondary">rank {war.rank} | score {war.score}</Typography>
+              <Typography variant="body2" color="text.secondary">место {war.rank} | счёт {war.score}</Typography>
             </Stack>
             <LinearProgress
               variant="determinate"
@@ -379,37 +379,37 @@ function TelegramSyncTab({ sync, onReload, onRelink, busy }) {
     <Stack spacing={1.2}>
       <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={1}>
         <Typography variant="body2" sx={{ color: "#9ec2da" }}>
-          Linked in clan: {linkedCount}/{members.length} {sync?.platformGroupId ? `| chat ${sync.platformGroupId}` : "| chat not configured"}
+          Привязано в клане: {linkedCount}/{members.length} {sync?.platformGroupId ? `| чат ${sync.platformGroupId}` : "| чат не настроен"}
         </Typography>
-        <Button variant="outlined" onClick={onReload} disabled={busy}>Reload Sync</Button>
+        <Button variant="outlined" onClick={onReload} disabled={busy}>Обновить синхронизацию</Button>
       </Stack>
 
       {!sync?.platformGroupId && (
         <Typography color="warning.main">
-          Telegram chat is not configured for this clan. Run `/commands/setup/telegram` first.
+          Для этого клана Telegram-чат не настроен. Сначала выполните `/setup #CLANTAG`.
         </Typography>
       )}
 
       <Paper variant="outlined" sx={{ p: 1.1, borderColor: "rgba(132,186,217,0.2)", bgcolor: "rgba(6,17,27,0.6)", overflow: "hidden" }}>
-        <Typography sx={{ fontWeight: 700, mb: 0.8 }}>Unlinked clan members</Typography>
+        <Typography sx={{ fontWeight: 700, mb: 0.8 }}>Непривязанные участники клана</Typography>
         {unlinkedMembers.length ? (
           <Stack spacing={0.7} sx={{ maxHeight: 260, overflowY: "auto" }}>
             {unlinkedMembers.map((member) => (
               <Stack key={`unlinked-${member.playerTag}`} direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={0.4}>
                 <Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>
-                  {member.playerName} {member.isAuthorized ? "[auth]" : ""} ({member.playerTag})
+                  {member.playerName} {member.isAuthorized ? "[авторизован]" : ""} ({member.playerTag})
                 </Typography>
-                <Typography variant="body2" color="text.secondary">left {member.battlesRemaining}</Typography>
+                <Typography variant="body2" color="text.secondary">осталось {member.battlesRemaining}</Typography>
               </Stack>
             ))}
           </Stack>
         ) : (
-          <Typography variant="body2" color="text.secondary">All current clan members are linked.</Typography>
+          <Typography variant="body2" color="text.secondary">Все текущие участники клана уже привязаны.</Typography>
         )}
       </Paper>
 
       <Paper variant="outlined" sx={{ p: 1.1, borderColor: "rgba(132,186,217,0.2)", bgcolor: "rgba(6,17,27,0.6)", overflow: "hidden" }}>
-        <Typography sx={{ fontWeight: 700, mb: 0.8 }}>Linked Telegram users</Typography>
+        <Typography sx={{ fontWeight: 700, mb: 0.8 }}>Привязанные пользователи Telegram</Typography>
         {linkedUsers.length ? (
           <Stack spacing={0.9} sx={{ maxHeight: 340, overflowY: "auto" }}>
             {linkedUsers.map((user) => (
@@ -420,14 +420,14 @@ function TelegramSyncTab({ sync, onReload, onRelink, busy }) {
                       {user.displayName} ({user.platformUserId})
                     </Typography>
                     <Typography variant="body2" color={user.inCurrentClan ? "success.main" : "warning.main"}>
-                      {user.inCurrentClan ? "in current clan" : "not in current clan"}
+                      {user.inCurrentClan ? "в текущем клане" : "не в текущем клане"}
                     </Typography>
                   </Stack>
                   <Stack direction={{ xs: "column", sm: "row" }} spacing={0.8}>
                     <TextField
                       fullWidth
                       size="small"
-                      label="Player tag"
+                      label="Тег игрока"
                       value={getDraft(user)}
                       onChange={(e) => setDraft(user.platformUserId, e.target.value)}
                       placeholder="#PLAYER"
@@ -437,7 +437,7 @@ function TelegramSyncTab({ sync, onReload, onRelink, busy }) {
                       onClick={() => onRelink(user.platformUserId, user.displayName, getDraft(user))}
                       disabled={busy || !sync?.platformGroupId || !getDraft(user).trim()}
                     >
-                      Relink
+                      Перепривязать
                     </Button>
                   </Stack>
                 </Stack>
@@ -445,7 +445,7 @@ function TelegramSyncTab({ sync, onReload, onRelink, busy }) {
             ))}
           </Stack>
         ) : (
-          <Typography variant="body2" color="text.secondary">No linked Telegram users yet.</Typography>
+          <Typography variant="body2" color="text.secondary">Пока нет привязанных пользователей Telegram.</Typography>
         )}
       </Paper>
     </Stack>
@@ -470,14 +470,14 @@ function ScrollList({ title, members, emptyText, authorizedSet }) {
                 <Paper key={`${member.playerTag}-${title}`} variant="outlined" sx={{ p: 0.9, borderColor: "rgba(132,186,217,0.2)", bgcolor: "rgba(10,24,37,0.65)", overflow: "hidden" }}>
                   <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={0.4}>
                     <Typography sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>
-                      {member.playerName} {isAuthorized ? "[auth]" : ""}
+                      {member.playerName} {isAuthorized ? "[авторизован]" : ""}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      left {member.battlesRemaining ?? 0}
+                      осталось {member.battlesRemaining ?? 0}
                     </Typography>
                   </Stack>
                   <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
-                    {member.playerTag} | played {member.battlesPlayed ?? 0}/4
+                    {member.playerTag} | сыграно {member.battlesPlayed ?? 0}/4
                   </Typography>
                   <LinearProgress
                     variant="determinate"

@@ -16,6 +16,12 @@ public class PlayerLinkRepository : IPlayerLinkRepository
     public Task<PlayerLink?> GetByGroupAndUserAsync(Guid groupId, Guid userId, CancellationToken cancellationToken)
         => _db.PlayerLinks.FirstOrDefaultAsync(x => x.GroupId == groupId && x.UserId == userId, cancellationToken);
 
+    public Task<PlayerLink?> GetLatestByUserAsync(Guid userId, CancellationToken cancellationToken)
+        => _db.PlayerLinks
+            .Where(x => x.UserId == userId)
+            .OrderByDescending(x => x.LinkedAtUtc)
+            .FirstOrDefaultAsync(cancellationToken);
+
     public async Task<IReadOnlyList<PlayerLink>> GetByGroupAsync(Guid groupId, CancellationToken cancellationToken)
         => await _db.PlayerLinks
             .Include(x => x.User)

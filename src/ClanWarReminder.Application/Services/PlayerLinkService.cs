@@ -57,6 +57,7 @@ public class PlayerLinkService
         if (existing is not null)
         {
             existing.PlayerTag = normalizedTag;
+            existing.LinkedAtUtc = DateTimeOffset.UtcNow;
             await _links.UpdateAsync(existing, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
             return existing;

@@ -106,7 +106,7 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
             case "/start":
             case "/help":
                 await SendTextAsync(messenger, chatId,
-                    "Commands:\n/setup #CLANTAG\n/link #PLAYERTAG\n/status\n/tagnotplayed\n/help",
+                    "Команды:\n/setup #CLANTAG\n/link #PLAYERTAG\n/status\n/tagnotplayed\n/help",
                     cancellationToken);
                 return;
 
@@ -128,7 +128,7 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
                 return;
 
             default:
-                await SendTextAsync(messenger, chatId, "Unknown command. Use /help", cancellationToken);
+                await SendTextAsync(messenger, chatId, "Неизвестная команда. Используйте /help", cancellationToken);
                 return;
         }
     }
@@ -142,7 +142,7 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
     {
         if (args.Length == 0)
         {
-            await SendTextAsync(messenger, chatId, "Usage: /setup #CLANTAG", cancellationToken);
+            await SendTextAsync(messenger, chatId, "Использование: /setup #CLANTAG", cancellationToken);
             return;
         }
 
@@ -152,7 +152,7 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
         await SendTextAsync(
             messenger,
             chatId,
-            $"Setup complete. Chat {chatId} linked to clan {group.ClanTag}.",
+            $"Настройка завершена. Чат {chatId} привязан к клану {group.ClanTag}.",
             cancellationToken);
     }
 
@@ -169,19 +169,19 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
             var top = status.NotPlayed
                 .OrderByDescending(x => x.BattlesRemaining)
                 .Take(5)
-                .Select(x => $"{x.PlayerName} ({x.PlayerTag}) left {x.BattlesRemaining}");
+                .Select(x => $"{x.PlayerName} ({x.PlayerTag}) осталось {x.BattlesRemaining}");
 
             var lines = new List<string>
             {
-                $"Clan {status.ClanTag}",
-                $"War {status.WarKey}",
-                $"Played: {status.Played.Count}",
-                $"Not played: {status.NotPlayed.Count}"
+                $"Клан {status.ClanTag}",
+                $"Война {status.WarKey}",
+                $"Сыграли: {status.Played.Count}",
+                $"Не сыграли: {status.NotPlayed.Count}"
             };
 
             if (status.NotPlayed.Count > 0)
             {
-                lines.Add("Top pending:");
+                lines.Add("Кто ещё не сыграл:");
                 lines.AddRange(top.Select(x => $"- {x}"));
             }
 
@@ -189,7 +189,7 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
         }
         catch (Exception ex)
         {
-            await SendTextAsync(messenger, chatId, $"Status failed: {ex.Message}", cancellationToken);
+            await SendTextAsync(messenger, chatId, $"Не удалось получить статус: {ex.Message}", cancellationToken);
         }
     }
 
@@ -203,13 +203,13 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
     {
         if (args.Length == 0)
         {
-            await SendTextAsync(messenger, chatId, "Usage: /link #PLAYERTAG", cancellationToken);
+            await SendTextAsync(messenger, chatId, "Использование: /link #PLAYERTAG", cancellationToken);
             return;
         }
 
         if (message.From is null || message.From.Id <= 0)
         {
-            await SendTextAsync(messenger, chatId, "Cannot read Telegram user identity for this message.", cancellationToken);
+            await SendTextAsync(messenger, chatId, "Не удалось определить Telegram-пользователя для этого сообщения.", cancellationToken);
             return;
         }
 
@@ -224,11 +224,11 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
                 args[0],
                 cancellationToken);
 
-            await SendTextAsync(messenger, chatId, $"Linked {BuildUserDisplayName(message.From)} to {link.PlayerTag}.", cancellationToken);
+            await SendTextAsync(messenger, chatId, $"Пользователь {BuildUserDisplayName(message.From)} привязан к тегу {link.PlayerTag}.", cancellationToken);
         }
         catch (Exception ex)
         {
-            await SendTextAsync(messenger, chatId, $"Link failed: {ex.Message}", cancellationToken);
+            await SendTextAsync(messenger, chatId, $"Не удалось выполнить привязку: {ex.Message}", cancellationToken);
         }
     }
 
@@ -245,7 +245,7 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
 
         if (group is null)
         {
-            await SendTextAsync(messenger, chatId, "Group is not configured. Use /setup #CLANTAG first.", cancellationToken);
+            await SendTextAsync(messenger, chatId, "Группа не настроена. Сначала используйте /setup #CLANTAG.", cancellationToken);
             return;
         }
 
@@ -257,7 +257,7 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
 
         if (notPlayedByTag.Count == 0)
         {
-            await SendTextAsync(messenger, chatId, "All players have completed clan war battles.", cancellationToken);
+            await SendTextAsync(messenger, chatId, "Все игроки уже завершили бои войны кланов.", cancellationToken);
             return;
         }
 
@@ -276,27 +276,27 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
 
         var lines = new List<string>
         {
-            $"Clan {group.ClanTag}: players with battles remaining ({notPlayedByTag.Count})"
+            $"Клан {group.ClanTag}: игроки с оставшимися боями ({notPlayedByTag.Count})"
         };
 
         if (linkedTargets.Count > 0)
         {
-            lines.Add("Linked players:");
+            lines.Add("Привязанные игроки:");
             foreach (var link in linkedTargets)
             {
                 var normalizedTag = TagNormalizer.NormalizeClanOrPlayerTag(link.PlayerTag);
                 var status = notPlayedByTag[normalizedTag];
                 var displayName = string.IsNullOrWhiteSpace(link.User.DisplayName) ? normalizedTag : link.User.DisplayName;
-                lines.Add($"- {BuildTelegramMention(link.User.PlatformUserId, displayName)} ({normalizedTag}) left {status.BattlesRemaining}");
+                lines.Add($"- {BuildTelegramMention(link.User.PlatformUserId, displayName)} ({normalizedTag}) осталось {status.BattlesRemaining}");
             }
         }
 
         if (unlinkedTargets.Count > 0)
         {
-            lines.Add("Not linked in mini app yet:");
+            lines.Add("Пока не привязаны в мини-приложении:");
             foreach (var member in unlinkedTargets)
             {
-                lines.Add($"- {WebUtility.HtmlEncode(member.PlayerName)} ({WebUtility.HtmlEncode(member.PlayerTag)}) left {member.BattlesRemaining}");
+                lines.Add($"- {WebUtility.HtmlEncode(member.PlayerName)} ({WebUtility.HtmlEncode(member.PlayerTag)}) осталось {member.BattlesRemaining}");
             }
         }
 

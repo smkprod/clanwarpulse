@@ -153,42 +153,76 @@ app.MapPost("/miniapp/auth/player", async (
             }
         }
 
-        var identity = await clashRoyaleClient.GetPlayerIdentityAsync(request.PlayerTag, cancellationToken);
-        authorizedPlayers.MarkAuthorized(identity.PlayerTag);
+        var response = await BuildPlayerAuthResponseAsync(
+            request.PlayerTag,
+            telegramIdentity,
+            request.TelegramChatId,
+            statusService,
+            clashRoyaleClient,
+            playerLinkService,
+            groups,
+            authorizedPlayers,
+            botProfileResolver,
+            cancellationToken);
 
-        string? linkedTelegramGroupId = null;
-        if (telegramIdentity is not null)
-        {
-            var normalizedClanTag = TagNormalizer.NormalizeClanOrPlayerTag(identity.ClanTag);
-            var targetGroupId = !string.IsNullOrWhiteSpace(request.TelegramChatId)
-                ? request.TelegramChatId.Trim()
-                : (await groups.GetActiveByClanTagAsync(PlatformType.Telegram, normalizedClanTag, cancellationToken))?.PlatformGroupId;
+        return Results.Ok(response);
+    }
+    catch (Exception ex) when (TryMapClashRoyaleError(ex, out var message))
+    {
+        return Results.BadRequest(new { error = message });
+    }
+});
 
-            if (!string.IsNullOrWhiteSpace(targetGroupId))
-            {
-                await playerLinkService.LinkAsync(
-                    PlatformType.Telegram,
-                    targetGroupId,
-                    telegramIdentity.UserId,
-                    telegramIdentity.DisplayName,
-                    identity.PlayerTag,
-                    cancellationToken);
+app.MapPost("/miniapp/auth/restore", async (
+    PlayerRestoreRequest request,
+    ClanStatusService statusService,
+    IClashRoyaleClient clashRoyaleClient,
+    TelegramInitDataValidator telegramValidator,
+    PlayerLinkService playerLinkService,
+    IUserRepository users,
+    IPlayerLinkRepository links,
+    IGroupRepository groups,
+    AuthorizedPlayerRegistry authorizedPlayers,
+    TelegramBotProfileResolver botProfileResolver,
+    CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(request.TelegramInitData))
+    {
+        return Results.BadRequest(new { error = "Не переданы данные Telegram для восстановления входа." });
+    }
 
-                linkedTelegramGroupId = targetGroupId;
-            }
-        }
+    if (!telegramValidator.TryValidate(request.TelegramInitData, out var telegramIdentity, out var telegramError))
+    {
+        return Results.BadRequest(new { error = telegramError });
+    }
 
-        linkedTelegramGroupId ??= (await groups.GetActiveByClanTagAsync(
-            PlatformType.Telegram,
-            TagNormalizer.NormalizeClanOrPlayerTag(identity.ClanTag),
-            cancellationToken))?.PlatformGroupId;
+    var user = await users.GetByPlatformUserAsync(PlatformType.Telegram, telegramIdentity!.UserId, cancellationToken);
+    if (user is null)
+    {
+        return Results.Ok(new PlayerRestoreResponse(false, "Для этого Telegram-аккаунта пока нет сохраненной привязки игрока.", null));
+    }
 
-        var dashboard = await statusService.GetDashboardByClanTagAsync(identity.ClanTag, cancellationToken);
-        var authorizedTags = authorizedPlayers.GetAuthorizedTagsForMembers(dashboard.Played.Concat(dashboard.NotPlayed).Select(x => x.PlayerTag));
-        var botUsername = await botProfileResolver.GetBotUsernameAsync(cancellationToken);
-        var botLink = BuildBotLink(botUsername, identity.PlayerTag);
+    var latestLink = await links.GetLatestByUserAsync(user.Id, cancellationToken);
+    if (latestLink is null || string.IsNullOrWhiteSpace(latestLink.PlayerTag))
+    {
+        return Results.Ok(new PlayerRestoreResponse(false, "Не удалось найти сохраненный тег игрока для этого Telegram-аккаунта.", null));
+    }
 
-        return Results.Ok(new PlayerAuthResponse(identity, dashboard, authorizedTags, botLink, linkedTelegramGroupId));
+    try
+    {
+        var response = await BuildPlayerAuthResponseAsync(
+            latestLink.PlayerTag,
+            telegramIdentity,
+            request.TelegramChatId,
+            statusService,
+            clashRoyaleClient,
+            playerLinkService,
+            groups,
+            authorizedPlayers,
+            botProfileResolver,
+            cancellationToken);
+
+        return Results.Ok(new PlayerRestoreResponse(true, null, response));
     }
     catch (Exception ex) when (TryMapClashRoyaleError(ex, out var message))
     {
@@ -396,7 +430,7 @@ app.MapPost("/commands/notify/not-played", async (
     var group = await groups.GetByPlatformGroupAsync(request.Platform, request.PlatformGroupId, cancellationToken);
     if (group is null)
     {
-        return Results.BadRequest(new { error = "Group is not configured. Run /setup first." });
+        return Results.BadRequest(new { error = "Группа не настроена. Сначала выполните /setup." });
     }
 
     var dashboard = await statusService.GetDashboardByClanTagAsync(group.ClanTag, cancellationToken);
@@ -407,7 +441,7 @@ app.MapPost("/commands/notify/not-played", async (
 
     if (notPlayedByTag.Count == 0)
     {
-        return Results.Ok(new { sent = false, text = "All players have completed clan war battles." });
+        return Results.Ok(new { sent = false, text = "Все игроки уже завершили бои войны кланов." });
     }
 
     var groupLinks = await links.GetByGroupAsync(group.Id, cancellationToken);
@@ -425,27 +459,27 @@ app.MapPost("/commands/notify/not-played", async (
 
     var lines = new List<string>
     {
-        $"Clan {group.ClanTag}: players with battles remaining ({notPlayedByTag.Count})"
+        $"Клан {group.ClanTag}: игроки с оставшимися боями ({notPlayedByTag.Count})"
     };
 
     if (linkedTargets.Count > 0)
     {
-        lines.Add("Linked players:");
+        lines.Add("Привязанные игроки:");
         foreach (var link in linkedTargets)
         {
             var normalizedTag = TagNormalizer.NormalizeClanOrPlayerTag(link.PlayerTag);
             var status = notPlayedByTag[normalizedTag];
             var displayName = string.IsNullOrWhiteSpace(link.User.DisplayName) ? normalizedTag : link.User.DisplayName;
-            lines.Add($"- {BuildTelegramMention(link.User.PlatformUserId, displayName)} ({normalizedTag}) left {status.BattlesRemaining}");
+            lines.Add($"- {BuildTelegramMention(link.User.PlatformUserId, displayName)} ({normalizedTag}) осталось {status.BattlesRemaining}");
         }
     }
 
     if (unlinkedTargets.Count > 0)
     {
-        lines.Add("Not linked in mini app yet:");
+        lines.Add("Пока не привязаны в мини-приложении:");
         foreach (var member in unlinkedTargets)
         {
-            lines.Add($"- {WebUtility.HtmlEncode(member.PlayerName)} ({WebUtility.HtmlEncode(member.PlayerTag)}) left {member.BattlesRemaining}");
+            lines.Add($"- {WebUtility.HtmlEncode(member.PlayerName)} ({WebUtility.HtmlEncode(member.PlayerTag)}) осталось {member.BattlesRemaining}");
         }
     }
 
@@ -498,6 +532,53 @@ app.MapGet("/debug/server-ip", async (IHttpClientFactory httpClientFactory, Canc
     });
 });
 
+app.MapGet("/debug/clash-royale/auth-check", async (
+    IConfiguration configuration,
+    IHttpClientFactory httpClientFactory,
+    CancellationToken cancellationToken) =>
+{
+    var baseUrl = configuration["ClashRoyale:BaseUrl"]?.Trim();
+    var apiToken = configuration["ClashRoyale:ApiToken"]?.Trim();
+
+    if (string.IsNullOrWhiteSpace(baseUrl))
+    {
+        return Results.BadRequest(new { error = "ClashRoyale:BaseUrl is not configured." });
+    }
+
+    if (string.IsNullOrWhiteSpace(apiToken) || apiToken.Contains("<YOUR_", StringComparison.OrdinalIgnoreCase))
+    {
+        return Results.BadRequest(new { error = "ClashRoyale:ApiToken is not configured." });
+    }
+
+    var client = httpClientFactory.CreateClient();
+    client.Timeout = TimeSpan.FromSeconds(15);
+
+    using var request = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl.TrimEnd('/')}/cards");
+    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiToken);
+
+    using var response = await client.SendAsync(request, cancellationToken);
+    var body = await response.Content.ReadAsStringAsync(cancellationToken);
+    var bodyPreview = string.IsNullOrWhiteSpace(body)
+        ? null
+        : body[..Math.Min(body.Length, 300)];
+
+    var diagnosis = response.StatusCode switch
+    {
+        HttpStatusCode.OK => "Clash Royale API token works from this server.",
+        HttpStatusCode.Unauthorized => "Clash Royale API returned 401 Unauthorized. The token is invalid, expired, or malformed.",
+        HttpStatusCode.Forbidden => "Clash Royale API returned 403 Forbidden. The token may be valid, but this server IP is not allowed for it.",
+        _ => "Clash Royale API request failed."
+    };
+
+    return Results.Ok(new
+    {
+        statusCode = (int)response.StatusCode,
+        reasonPhrase = response.ReasonPhrase,
+        diagnosis,
+        responsePreview = bodyPreview
+    });
+});
+
 app.Run();
 
 static string? BuildBotLink(string? botUsername, string playerTag)
@@ -509,6 +590,56 @@ static string? BuildBotLink(string? botUsername, string playerTag)
 
     var normalizedTag = playerTag.Trim().TrimStart('#').ToUpperInvariant();
     return $"https://t.me/{botUsername}?start=player_{normalizedTag}";
+}
+
+static async Task<PlayerAuthResponse> BuildPlayerAuthResponseAsync(
+    string playerTag,
+    TelegramIdentity? telegramIdentity,
+    string? telegramChatId,
+    ClanStatusService statusService,
+    IClashRoyaleClient clashRoyaleClient,
+    PlayerLinkService playerLinkService,
+    IGroupRepository groups,
+    AuthorizedPlayerRegistry authorizedPlayers,
+    TelegramBotProfileResolver botProfileResolver,
+    CancellationToken cancellationToken)
+{
+    var identity = await clashRoyaleClient.GetPlayerIdentityAsync(playerTag, cancellationToken);
+    authorizedPlayers.MarkAuthorized(identity.PlayerTag);
+
+    string? linkedTelegramGroupId = null;
+    if (telegramIdentity is not null)
+    {
+        var normalizedClanTag = TagNormalizer.NormalizeClanOrPlayerTag(identity.ClanTag);
+        var targetGroupId = !string.IsNullOrWhiteSpace(telegramChatId)
+            ? telegramChatId.Trim()
+            : (await groups.GetActiveByClanTagAsync(PlatformType.Telegram, normalizedClanTag, cancellationToken))?.PlatformGroupId;
+
+        if (!string.IsNullOrWhiteSpace(targetGroupId))
+        {
+            await playerLinkService.LinkAsync(
+                PlatformType.Telegram,
+                targetGroupId,
+                telegramIdentity.UserId,
+                telegramIdentity.DisplayName,
+                identity.PlayerTag,
+                cancellationToken);
+
+            linkedTelegramGroupId = targetGroupId;
+        }
+    }
+
+    linkedTelegramGroupId ??= (await groups.GetActiveByClanTagAsync(
+        PlatformType.Telegram,
+        TagNormalizer.NormalizeClanOrPlayerTag(identity.ClanTag),
+        cancellationToken))?.PlatformGroupId;
+
+    var dashboard = await statusService.GetDashboardByClanTagAsync(identity.ClanTag, cancellationToken);
+    var authorizedTags = authorizedPlayers.GetAuthorizedTagsForMembers(dashboard.Played.Concat(dashboard.NotPlayed).Select(x => x.PlayerTag));
+    var botUsername = await botProfileResolver.GetBotUsernameAsync(cancellationToken);
+    var botLink = BuildBotLink(botUsername, identity.PlayerTag);
+
+    return new PlayerAuthResponse(identity, dashboard, authorizedTags, botLink, linkedTelegramGroupId);
 }
 
 static bool TryMapClashRoyaleError(Exception ex, out string message)
@@ -524,7 +655,8 @@ static bool TryMapClashRoyaleError(Exception ex, out string message)
         message = httpRequestException.StatusCode switch
         {
             System.Net.HttpStatusCode.NotFound => "Player or clan tag was not found in Clash Royale API.",
-            System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden => "Clash Royale API token is invalid or missing.",
+            System.Net.HttpStatusCode.Unauthorized => "Clash Royale API returned 401 Unauthorized. The token is invalid, expired, or malformed.",
+            System.Net.HttpStatusCode.Forbidden => "Clash Royale API returned 403 Forbidden. The token may be valid, but this server IP is not whitelisted in the Clash Royale developer portal.",
             _ => "Failed to load data from Clash Royale API."
         };
         return true;
@@ -552,12 +684,14 @@ public sealed record LinkCommand(PlatformType Platform, string PlatformGroupId, 
 public sealed record TelegramAuthRequest(string InitData);
 public sealed record TelegramAuthResponse(string UserId, string DisplayName, string? Username, DateTimeOffset AuthDateUtc);
 public sealed record PlayerAuthRequest(string PlayerTag, string? TelegramInitData = null, string? TelegramChatId = null);
+public sealed record PlayerRestoreRequest(string TelegramInitData, string? TelegramChatId = null);
 public sealed record PlayerAuthResponse(
     PlayerIdentityResult Identity,
     ClanWarDashboard Dashboard,
     IReadOnlyList<string> AuthorizedPlayerTags,
     string? BotLink,
     string? LinkedTelegramGroupId);
+public sealed record PlayerRestoreResponse(bool Restored, string? Message, PlayerAuthResponse? Session);
 public sealed record TelegramRelinkCommand(string PlatformGroupId, string PlatformUserId, string DisplayName, string PlayerTag);
 public sealed record TelegramSyncMember(
     string PlayerTag,
