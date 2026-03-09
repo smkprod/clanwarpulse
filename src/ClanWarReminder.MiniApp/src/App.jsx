@@ -233,9 +233,6 @@ export default function App() {
       <CssBaseline />
       <Container maxWidth="md" sx={{ py: 2.5, pb: 4, overflowX: "hidden" }}>
         <Stack spacing={1.5} sx={{ mb: 2.5 }}>
-          <Typography variant="overline" sx={{ color: "#8dd6ff", letterSpacing: "0.13em" }}>
-            Telegram мини-приложение
-          </Typography>
           <Typography variant="h4">Напоминание о войне кланов</Typography>
           <Typography variant="body2" sx={{ color: "#b3d3e8", overflowWrap: "anywhere" }}>
             {titleLine}

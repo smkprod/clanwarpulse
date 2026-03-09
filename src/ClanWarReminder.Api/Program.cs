@@ -204,6 +204,10 @@ app.MapPost("/miniapp/auth/player", async (
     {
         return Results.BadRequest(new { error = message });
     }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message, statusCode: 500);
+    }
 });
 
 app.MapPost("/miniapp/auth/restore", async (
@@ -261,6 +265,10 @@ app.MapPost("/miniapp/auth/restore", async (
     {
         return Results.BadRequest(new { error = message });
     }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message, statusCode: 500);
+    }
 });
 
 app.MapGet("/miniapp/player/dashboard", async (
@@ -291,6 +299,10 @@ app.MapGet("/miniapp/player/dashboard", async (
     {
         return Results.BadRequest(new { error = message });
     }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message, statusCode: 500);
+    }
 });
 
 app.MapGet("/miniapp/player/profile", async (
@@ -308,6 +320,10 @@ app.MapGet("/miniapp/player/profile", async (
     {
         return Results.BadRequest(new { error = message });
     }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message, statusCode: 500);
+    }
 });
 
 app.MapGet("/miniapp/clan/details", async (
@@ -323,6 +339,10 @@ app.MapGet("/miniapp/clan/details", async (
     catch (Exception ex) when (TryMapClashRoyaleError(ex, out var message))
     {
         return Results.BadRequest(new { error = message });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message, statusCode: 500);
     }
 });
 
