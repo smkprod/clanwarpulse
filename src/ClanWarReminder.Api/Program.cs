@@ -260,6 +260,22 @@ app.MapGet("/miniapp/player/dashboard", async (
     }
 });
 
+app.MapGet("/miniapp/player/profile", async (
+    string playerTag,
+    IClashRoyaleClient clashRoyaleClient,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var profile = await clashRoyaleClient.GetPlayerWarProfileAsync(playerTag, cancellationToken);
+        return Results.Ok(profile);
+    }
+    catch (Exception ex) when (TryMapClashRoyaleError(ex, out var message))
+    {
+        return Results.BadRequest(new { error = message });
+    }
+});
+
 app.MapGet("/miniapp/clan/details", async (
     string clanTag,
     IClashRoyaleClient clashRoyaleClient,

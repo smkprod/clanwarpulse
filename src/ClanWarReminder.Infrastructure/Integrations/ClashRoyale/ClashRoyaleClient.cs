@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Globalization;
 using System.Text.Json.Serialization;
 using ClanWarReminder.Application.Abstractions.Integrations;
 using ClanWarReminder.Application.Models;
@@ -42,12 +43,19 @@ public class ClashRoyaleClient : IClashRoyaleClient
                 playedBattles = 1;
             }
 
+            var totalContribution = x.Fame + x.RepairPoints;
+            var averageContribution = playedBattles > 0
+                ? Math.Round(totalContribution / (double)playedBattles, 1)
+                : 0;
+
             return new ClanWarMemberStatus(
                 x.Tag,
                 x.Name,
                 playedBattles > 0,
                 playedBattles,
-                Math.Max(0, maxBattlesPerDay - playedBattles));
+                Math.Max(0, maxBattlesPerDay - playedBattles),
+                totalContribution,
+                averageContribution);
         }).ToList();
 
         return new ClanWarSnapshot(BuildWarKey(payload), members);
@@ -275,6 +283,152 @@ public class ClashRoyaleClient : IClashRoyaleClient
             recentWars);
     }
 
+    public async Task<PlayerWarProfile> GetPlayerWarProfileAsync(string playerTag, CancellationToken cancellationToken)
+    {
+        var identity = await GetPlayerIdentityAsync(playerTag, cancellationToken);
+        var currentRace = await GetCurrentRiverRaceAsync(identity.ClanTag, cancellationToken);
+        var currentParticipant = currentRace.Clan.Participants
+            .FirstOrDefault(x => string.Equals(NormalizeTag(x.Tag), identity.PlayerTag, StringComparison.OrdinalIgnoreCase));
+
+        var currentWeekBattles = currentParticipant is null ? 0 : ResolvePlayedBattles(currentParticipant);
+        var currentWeekContribution = currentParticipant is null ? 0 : currentParticipant.Fame + currentParticipant.RepairPoints;
+        var currentWeekAverage = currentWeekBattles > 0
+            ? Math.Round(currentWeekContribution / (double)currentWeekBattles, 1)
+            : 0;
+
+        var battleLog = await GetPlayerBattleLogAsync(playerTag, cancellationToken);
+        var warEntries = battleLog
+            .Where(IsWarBattle)
+            .Select(MapWarBattleEntry)
+            .Where(x => x is not null)
+            .Select(x => x!)
+            .OrderByDescending(x => x.BattleTimeUtc)
+            .ToList();
+
+        var recentWeeks = warEntries
+            .GroupBy(x => BuildWeekKey(x.BattleTimeUtc))
+            .Select(group =>
+            {
+                var startedAt = StartOfWarWeek(group.Max(x => x.BattleTimeUtc));
+                var endAt = startedAt.AddDays(4);
+                var weekClan = group
+                    .GroupBy(x => NormalizeTag(x.ClanTag))
+                    .OrderByDescending(x => x.Count())
+                    .Select(x => x.First())
+                    .FirstOrDefault();
+                var battlesPlayed = group.Count();
+                var contributionSum = group
+                    .Where(x => x.Contribution.HasValue)
+                    .Select(x => x.Contribution!.Value)
+                    .DefaultIfEmpty()
+                    .Sum();
+                var hasContribution = group.Any(x => x.Contribution.HasValue);
+
+                return new PlayerWarWeekSummary(
+                    group.Key,
+                    startedAt,
+                    endAt,
+                    weekClan?.ClanTag ?? identity.ClanTag,
+                    weekClan?.ClanName ?? identity.ClanName,
+                    battlesPlayed,
+                    16,
+                    Math.Round((battlesPlayed / 16d) * 100d, 1),
+                    battlesPlayed >= 16,
+                    hasContribution ? contributionSum : null,
+                    hasContribution && battlesPlayed > 0 ? Math.Round(contributionSum / (double)battlesPlayed, 1) : null);
+            })
+            .OrderByDescending(x => x.StartedAtUtc)
+            .Take(8)
+            .ToList();
+
+        if (currentParticipant is not null)
+        {
+            var currentWeekKey = BuildWarKey(currentRace);
+            var startedAt = StartOfWarWeek(DateTimeOffset.UtcNow);
+            var currentWeek = new PlayerWarWeekSummary(
+                currentWeekKey,
+                startedAt,
+                startedAt.AddDays(4),
+                identity.ClanTag,
+                identity.ClanName,
+                currentWeekBattles,
+                16,
+                Math.Round((currentWeekBattles / 16d) * 100d, 1),
+                currentWeekBattles >= 16,
+                currentWeekContribution,
+                currentWeekBattles > 0 ? Math.Round(currentWeekContribution / (double)currentWeekBattles, 1) : 0);
+
+            var existingIndex = recentWeeks.FindIndex(x => string.Equals(x.WarKey, currentWeekKey, StringComparison.OrdinalIgnoreCase));
+            if (existingIndex >= 0)
+            {
+                recentWeeks[existingIndex] = currentWeek;
+            }
+            else
+            {
+                recentWeeks.Insert(0, currentWeek);
+            }
+        }
+
+        var trackedWeeks = recentWeeks.Count > 0 ? recentWeeks : new List<PlayerWarWeekSummary>
+        {
+            new(
+                BuildWarKey(currentRace),
+                StartOfWarWeek(DateTimeOffset.UtcNow),
+                StartOfWarWeek(DateTimeOffset.UtcNow).AddDays(4),
+                identity.ClanTag,
+                identity.ClanName,
+                currentWeekBattles,
+                16,
+                Math.Round((currentWeekBattles / 16d) * 100d, 1),
+                currentWeekBattles >= 16,
+                currentWeekContribution,
+                currentWeekBattles > 0 ? Math.Round(currentWeekContribution / (double)currentWeekBattles, 1) : 0)
+        };
+
+        var averageBattlesPerWeek = Math.Round(trackedWeeks.Average(x => x.BattlesPlayed), 1);
+        var overallParticipationRate = Math.Round(trackedWeeks.Average(x => x.ParticipationRate), 1);
+        var fullCompletionRate = Math.Round(trackedWeeks.Count(x => x.CompletedAllBattles) * 100d / trackedWeeks.Count, 1);
+        var perBattleContribution = trackedWeeks
+            .Select(x => x.AverageContributionPerBattle)
+            .Where(x => x.HasValue && x.Value > 0)
+            .Select(x => x!.Value)
+            .DefaultIfEmpty(currentWeekAverage > 0 ? currentWeekAverage : 100d)
+            .Average();
+        var predictedNextWeekBattles = Math.Clamp((int)Math.Round(averageBattlesPerWeek, MidpointRounding.AwayFromZero), 0, 16);
+        var predictedNextWeekContribution = (int)Math.Round(predictedNextWeekBattles * perBattleContribution, MidpointRounding.AwayFromZero);
+
+        var recentClans = warEntries
+            .GroupBy(x => NormalizeTag(x.ClanTag))
+            .Select(group => new PlayerRecentClanEntry(
+                group.First().ClanTag,
+                group.First().ClanName,
+                group.Count(),
+                group.Min(x => x.BattleTimeUtc),
+                group.Max(x => x.BattleTimeUtc)))
+            .OrderByDescending(x => x.LastSeenAtUtc)
+            .Take(6)
+            .ToList();
+
+        return new PlayerWarProfile(
+            identity.PlayerTag,
+            identity.PlayerName,
+            identity.ClanTag,
+            identity.ClanName,
+            currentWeekBattles,
+            16,
+            Math.Max(0, 16 - currentWeekBattles),
+            currentWeekContribution,
+            currentWeekAverage,
+            overallParticipationRate,
+            fullCompletionRate,
+            trackedWeeks.Sum(x => x.BattlesPlayed),
+            averageBattlesPerWeek,
+            predictedNextWeekBattles,
+            predictedNextWeekContribution,
+            trackedWeeks.Take(8).ToList(),
+            recentClans);
+    }
+
     public async Task<IReadOnlyList<ClanWarHistoryEntry>> GetRecentHistoryAsync(string clanTag, CancellationToken cancellationToken)
     {
         var log = await GetRiverRaceLogAsync(clanTag, cancellationToken);
@@ -327,6 +481,17 @@ public class ClashRoyaleClient : IClashRoyaleClient
             ?? throw new InvalidOperationException("Clash Royale API returned empty river race log payload.");
     }
 
+    private async Task<List<PlayerBattleLogEntryDto>> GetPlayerBattleLogAsync(string playerTag, CancellationToken cancellationToken)
+    {
+        var encodedTag = Uri.EscapeDataString(NormalizeTag(playerTag));
+        using var request = CreateRequest(HttpMethod.Get, $"{_options.BaseUrl}/players/{encodedTag}/battlelog");
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<List<PlayerBattleLogEntryDto>>(cancellationToken: cancellationToken)
+            ?? new List<PlayerBattleLogEntryDto>();
+    }
+
     private HttpRequestMessage CreateRequest(HttpMethod method, string url)
     {
         var request = new HttpRequestMessage(method, url);
@@ -360,6 +525,99 @@ public class ClashRoyaleClient : IClashRoyaleClient
     {
         var value = tag.Trim().ToUpperInvariant();
         return value.StartsWith('#') ? value : $"#{value}";
+    }
+
+    private static int ResolvePlayedBattles(ParticipantDto participant)
+    {
+        var playedBattles = Math.Max(
+            Math.Max(participant.BattlesPlayed, participant.DecksUsedToday),
+            Math.Max(participant.DecksUsed, participant.BoatAttacks));
+
+        if (playedBattles == 0 && participant.PeriodPoints > 0)
+        {
+            playedBattles = Math.Clamp((int)Math.Ceiling(participant.PeriodPoints / 100.0), 1, 16);
+        }
+
+        if (playedBattles == 0 && (participant.Fame > 0 || participant.RepairPoints > 0))
+        {
+            playedBattles = 1;
+        }
+
+        return playedBattles;
+    }
+
+    private static bool IsWarBattle(PlayerBattleLogEntryDto entry)
+    {
+        var type = entry.Type ?? string.Empty;
+        return type.Contains("river", StringComparison.OrdinalIgnoreCase) ||
+               type.Contains("boat", StringComparison.OrdinalIgnoreCase) ||
+               type.Contains("war", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static PlayerWarBattleEntry? MapWarBattleEntry(PlayerBattleLogEntryDto entry)
+    {
+        if (!TryParseBattleTime(entry.BattleTime, out var battleTimeUtc))
+        {
+            return null;
+        }
+
+        var team = entry.Team.FirstOrDefault();
+        var clan = team?.Clan ?? entry.Opponent.FirstOrDefault()?.Clan;
+        if (clan is null || string.IsNullOrWhiteSpace(clan.Tag))
+        {
+            return null;
+        }
+
+        int? contribution = null;
+        if (entry.Fame > 0)
+        {
+            contribution = entry.Fame;
+        }
+        else if (team?.Crowns is > 0)
+        {
+            contribution = team.Crowns.Value * 100;
+        }
+
+        return new PlayerWarBattleEntry(
+            battleTimeUtc,
+            NormalizeTag(clan.Tag),
+            clan.Name,
+            contribution);
+    }
+
+    private static bool TryParseBattleTime(string? value, out DateTimeOffset battleTimeUtc)
+    {
+        if (DateTimeOffset.TryParseExact(
+            value,
+            new[]
+            {
+                "yyyyMMdd'T'HHmmss'.'fff'Z'",
+                "yyyyMMdd'T'HHmmss'.'FF'Z'",
+                "yyyyMMdd'T'HHmmss'Z'"
+            },
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal,
+            out battleTimeUtc))
+        {
+            return true;
+        }
+
+        return DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out battleTimeUtc);
+    }
+
+    private static string BuildWeekKey(DateTimeOffset battleTimeUtc)
+    {
+        var weekStart = StartOfWarWeek(battleTimeUtc);
+        var week = ISOWeek.GetWeekOfYear(weekStart.UtcDateTime);
+        return $"{weekStart.Year}-W{week:00}";
+    }
+
+    private static DateTimeOffset StartOfWarWeek(DateTimeOffset value)
+    {
+        var utc = value.ToUniversalTime();
+        var day = utc.DayOfWeek == DayOfWeek.Sunday ? 7 : (int)utc.DayOfWeek;
+        var weekStart = utc.UtcDateTime.Date.AddDays(1 - day);
+        return new DateTimeOffset(weekStart, TimeSpan.Zero);
     }
 
     private static ClanWarOpponentStatus MapOpponent(RaceClanDto clan)
@@ -528,4 +786,37 @@ public class ClashRoyaleClient : IClashRoyaleClient
         [JsonPropertyName("totalClanScore")]
         public int TotalClanScore { get; set; }
     }
+
+    private sealed class PlayerBattleLogEntryDto
+    {
+        [JsonPropertyName("type")]
+        public string Type { get; set; } = string.Empty;
+
+        [JsonPropertyName("battleTime")]
+        public string BattleTime { get; set; } = string.Empty;
+
+        [JsonPropertyName("fame")]
+        public int Fame { get; set; }
+
+        [JsonPropertyName("team")]
+        public List<PlayerBattleParticipantDto> Team { get; set; } = new();
+
+        [JsonPropertyName("opponent")]
+        public List<PlayerBattleParticipantDto> Opponent { get; set; } = new();
+    }
+
+    private sealed class PlayerBattleParticipantDto
+    {
+        [JsonPropertyName("crowns")]
+        public int? Crowns { get; set; }
+
+        [JsonPropertyName("clan")]
+        public PlayerClanDto? Clan { get; set; }
+    }
+
+    private sealed record PlayerWarBattleEntry(
+        DateTimeOffset BattleTimeUtc,
+        string ClanTag,
+        string ClanName,
+        int? Contribution);
 }

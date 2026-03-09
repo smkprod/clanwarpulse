@@ -28,6 +28,7 @@ export default function App() {
   const [selectedClanTag, setSelectedClanTag] = useState("");
   const [clanDetails, setClanDetails] = useState(null);
   const [telegramSync, setTelegramSync] = useState(null);
+  const [playerProfile, setPlayerProfile] = useState(null);
 
   const titleLine = useMemo(() => {
     if (!session) {
@@ -71,6 +72,7 @@ export default function App() {
         setPlayerTag(data.session.identity.playerTag);
         window.localStorage.setItem(SESSION_STORAGE_KEY, data.session.identity.playerTag);
         await loadTelegramSync(data.session.identity.playerTag);
+        await loadPlayerProfile(data.session.identity.playerTag);
         setFeedback({ text: `Автоматически восстановлен вход для ${data.session.identity.playerName}.`, severity: "success" });
       } catch (error) {
         if (!cancelled) {
@@ -103,6 +105,7 @@ export default function App() {
       setClanDetails(null);
       setSelectedClanTag("");
       await loadTelegramSync(data.identity.playerTag);
+      await loadPlayerProfile(data.identity.playerTag);
       setFeedback({ text: `Загружен игрок ${data.identity.playerName} (${data.identity.playerTag})`, severity: "success" });
       notify("success");
     });
@@ -120,6 +123,7 @@ export default function App() {
       setClanDetails(null);
       setSelectedClanTag("");
       await loadTelegramSync(data.identity.playerTag);
+      await loadPlayerProfile(data.identity.playerTag);
       setFeedback({ text: "Данные войны клана обновлены.", severity: "success" });
       notify("success");
     });
@@ -168,6 +172,16 @@ export default function App() {
 
     const data = await apiGet(`/miniapp/telegram/sync?playerTag=${encodeURIComponent(tag)}`);
     setTelegramSync(data);
+  }
+
+  async function loadPlayerProfile(sourcePlayerTag = null) {
+    const tag = sourcePlayerTag ?? session?.identity?.playerTag;
+    if (!tag) {
+      return;
+    }
+
+    const data = await apiGet(`/miniapp/player/profile?playerTag=${encodeURIComponent(tag)}`);
+    setPlayerProfile(data);
   }
 
   async function relinkTelegramUser(platformUserId, displayName, targetPlayerTag) {
@@ -246,6 +260,8 @@ export default function App() {
             onNotifyNotPlayed={notifyNotPlayed}
             canNotifyNotPlayed={Boolean(session.linkedTelegramGroupId)}
             telegramSync={telegramSync}
+            playerProfile={playerProfile}
+            onLoadPlayerProfile={(tag) => runBusy(() => loadPlayerProfile(tag))}
             onLoadTelegramSync={() => runBusy(() => loadTelegramSync(session.identity.playerTag))}
             onRelinkTelegramUser={relinkTelegramUser}
             busy={busy}

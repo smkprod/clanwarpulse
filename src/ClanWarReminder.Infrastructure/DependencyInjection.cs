@@ -17,11 +17,40 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
+        var dotEnv = LoadDotEnv(FindDotEnvPath());
+
         services.Configure<ClashRoyaleOptions>(configuration.GetSection(ClashRoyaleOptions.SectionName));
         services.Configure<TelegramOptions>(configuration.GetSection(TelegramOptions.SectionName));
         services.Configure<WorkerOptions>(configuration.GetSection(WorkerOptions.SectionName));
+        services.PostConfigure<ClashRoyaleOptions>(options =>
+        {
+            options.BaseUrl = ResolveString(
+                options.BaseUrl,
+                configuration["ClashRoyale:BaseUrl"],
+                configuration["CLASH_ROYALE_BASE_URL"],
+                GetDotEnv(dotEnv, "CLASH_ROYALE_BASE_URL"),
+                "https://api.clashroyale.com/v1");
+            options.ApiToken = ResolveString(
+                options.ApiToken,
+                configuration["ClashRoyale:ApiToken"],
+                configuration["CLASH_ROYALE_API_TOKEN"],
+                GetDotEnv(dotEnv, "CLASH_ROYALE_API_TOKEN"));
+        });
+        services.PostConfigure<TelegramOptions>(options =>
+        {
+            options.BotToken = ResolveString(
+                options.BotToken,
+                configuration["Telegram:BotToken"],
+                configuration["TELEGRAM_BOT_TOKEN"],
+                GetDotEnv(dotEnv, "TELEGRAM_BOT_TOKEN"));
+            options.BotUsername = ResolveString(
+                options.BotUsername,
+                configuration["Telegram:BotUsername"],
+                configuration["TELEGRAM_BOT_USERNAME"],
+                GetDotEnv(dotEnv, "TELEGRAM_BOT_USERNAME"));
+        });
 
-        var connectionString = ResolveConnectionString(configuration);
+        var connectionString = ResolveConnectionString(configuration, dotEnv);
         services.AddDbContext<AppDbContext>(options =>
             options.UseNpgsql(connectionString));
 
@@ -52,7 +81,21 @@ public static class DependencyInjection
         return services;
     }
 
-    private static string ResolveConnectionString(IConfiguration configuration)
+    private static string ResolveString(params string?[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value) &&
+                !value.Contains("<YOUR_", StringComparison.OrdinalIgnoreCase))
+            {
+                return value.Trim();
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static string ResolveConnectionString(IConfiguration configuration, IReadOnlyDictionary<string, string> dotEnv)
     {
         // 1) Explicit env override on platforms like Render.
         var explicitEnv = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
@@ -61,8 +104,14 @@ public static class DependencyInjection
             return NormalizeIfPostgresUri(explicitEnv);
         }
 
+        var dotEnvConnection = GetDotEnv(dotEnv, "ConnectionStrings__DefaultConnection");
+        if (!string.IsNullOrWhiteSpace(dotEnvConnection))
+        {
+            return NormalizeIfPostgresUri(dotEnvConnection);
+        }
+
         // 2) Common managed DB url env var.
-        var databaseUrl = configuration["DATABASE_URL"];
+        var databaseUrl = configuration["DATABASE_URL"] ?? GetDotEnv(dotEnv, "DATABASE_URL");
         if (!string.IsNullOrWhiteSpace(databaseUrl))
         {
             return BuildNpgsqlConnectionString(databaseUrl);
@@ -128,16 +177,6 @@ public static class DependencyInjection
             builder.SslMode = SslMode.Require;
         }
 
-        if (query.TryGetValue("trust server certificate", out var trustCertRaw) &&
-            bool.TryParse(trustCertRaw, out var trustCert))
-        {
-            builder.TrustServerCertificate = trustCert;
-        }
-        else
-        {
-            builder.TrustServerCertificate = true;
-        }
-
         return builder.ConnectionString;
     }
 
@@ -167,5 +206,56 @@ public static class DependencyInjection
         }
 
         return result;
+    }
+
+    private static Dictionary<string, string> LoadDotEnv(string path)
+    {
+        var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            return values;
+        }
+
+        foreach (var rawLine in File.ReadAllLines(path))
+        {
+            var line = rawLine.Trim();
+            if (string.IsNullOrWhiteSpace(line) || line.StartsWith('#'))
+            {
+                continue;
+            }
+
+            var delimiterIndex = line.IndexOf('=');
+            if (delimiterIndex <= 0)
+            {
+                continue;
+            }
+
+            var key = line[..delimiterIndex].Trim();
+            var value = line[(delimiterIndex + 1)..].Trim().Trim('"');
+            if (!string.IsNullOrWhiteSpace(key))
+            {
+                values[key] = value;
+            }
+        }
+
+        return values;
+    }
+
+    private static string? GetDotEnv(IReadOnlyDictionary<string, string> values, string key)
+        => values.TryGetValue(key, out var value) ? value : null;
+
+    private static string FindDotEnvPath()
+    {
+        var current = new DirectoryInfo(Directory.GetCurrentDirectory());
+        for (var depth = 0; depth < 4 && current is not null; depth++, current = current.Parent)
+        {
+            var candidate = Path.Combine(current.FullName, ".env");
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return string.Empty;
     }
 }

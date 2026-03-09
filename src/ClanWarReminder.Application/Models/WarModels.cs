@@ -7,7 +7,9 @@ public sealed record ClanWarMemberStatus(
     string PlayerName,
     bool HasPlayed,
     int BattlesPlayed,
-    int BattlesRemaining);
+    int BattlesRemaining,
+    int? TotalContribution = null,
+    double? AverageContributionPerBattle = null);
 
 public sealed record ClanWarSnapshot(string WarKey, IReadOnlyList<ClanWarMemberStatus> Members);
 
@@ -92,6 +94,45 @@ public sealed record PlayerIdentityResult(
     string PlayerName,
     string ClanTag,
     string ClanName);
+
+public sealed record PlayerWarWeekSummary(
+    string WarKey,
+    DateTimeOffset StartedAtUtc,
+    DateTimeOffset EndedAtUtc,
+    string ClanTag,
+    string ClanName,
+    int BattlesPlayed,
+    int MaxBattles,
+    double ParticipationRate,
+    bool CompletedAllBattles,
+    int? TotalContribution,
+    double? AverageContributionPerBattle);
+
+public sealed record PlayerRecentClanEntry(
+    string ClanTag,
+    string ClanName,
+    int WarBattles,
+    DateTimeOffset FirstSeenAtUtc,
+    DateTimeOffset LastSeenAtUtc);
+
+public sealed record PlayerWarProfile(
+    string PlayerTag,
+    string PlayerName,
+    string CurrentClanTag,
+    string CurrentClanName,
+    int CurrentWeekBattlesPlayed,
+    int CurrentWeekMaxBattles,
+    int CurrentWeekBattlesRemaining,
+    int CurrentWeekContribution,
+    double CurrentWeekAverageContributionPerBattle,
+    double OverallParticipationRate,
+    double FullCompletionRate,
+    int TotalTrackedWarBattles,
+    double AverageBattlesPerWeek,
+    int PredictedNextWeekBattles,
+    int PredictedNextWeekContribution,
+    IReadOnlyList<PlayerWarWeekSummary> RecentWeeks,
+    IReadOnlyList<PlayerRecentClanEntry> RecentClans);
 
 public sealed record ReminderMessage(
     PlatformType Platform,
