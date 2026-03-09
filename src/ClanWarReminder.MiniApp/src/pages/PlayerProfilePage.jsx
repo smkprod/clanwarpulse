@@ -12,6 +12,22 @@ export function PlayerProfilePage({ profile, profileWindowWeeks, onWindowChange,
     );
   }
 
+  const recentWeeks = profile.recentWeeks ?? [];
+  const weeksWithContribution = recentWeeks.filter((week) => (week.totalContribution ?? 0) > 0);
+  const bestWeek = weeksWithContribution.reduce((best, week) =>
+    !best || (week.totalContribution ?? 0) > (best.totalContribution ?? 0) ? week : best, null);
+  const worstWeek = weeksWithContribution.reduce((worst, week) =>
+    !worst || (week.totalContribution ?? 0) < (worst.totalContribution ?? 0) ? week : worst, null);
+  const averageContributionPerWeek = weeksWithContribution.length
+    ? weeksWithContribution.reduce((sum, week) => sum + (week.totalContribution ?? 0), 0) / weeksWithContribution.length
+    : 0;
+  const averageContributionPerBattle = profile.totalTrackedWarBattles > 0
+    ? recentWeeks.reduce((sum, week) => sum + (week.totalContribution ?? 0), 0) / profile.totalTrackedWarBattles
+    : 0;
+  const colosseumWeeks = recentWeeks.filter((week) => week.isColosseumWeighted);
+  const riverRaceWeeks = recentWeeks.filter((week) => !week.isColosseumWeighted);
+  const recentFormScore = recentWeeks.slice(0, 3).reduce((sum, week) => sum + (week.totalContribution ?? 0), 0);
+
   return (
     <Paper elevation={0} sx={shellSx}>
       <Stack spacing={1.2}>
@@ -56,6 +72,52 @@ export function PlayerProfilePage({ profile, profileWindowWeeks, onWindowChange,
           <MetricCard label="Среднее боев" value={fmt(profile.averageBattlesPerWeek)} helper={`Всего учтено боев ${profile.totalTrackedWarBattles}`} />
           <MetricCard label="Прогноз" value={`${profile.predictedNextWeekBattles}/16`} helper={`${profile.predictedNextWeekContribution} очков в следующем КВ`} />
           <MetricCard label="Сейчас" value={`${profile.currentWeekBattlesPlayed}/16`} helper={`${profile.currentWeekContribution} очков в текущем КВ`} />
+        </Stack>
+
+        <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
+          <MetricCard label="Среднее очков" value={fmt(averageContributionPerWeek)} helper="Средний вклад за КВ" />
+          <MetricCard label="За бой" value={fmt(averageContributionPerBattle)} helper="Средние очки за 1 бой" />
+          <MetricCard label="Полный отыгрыш" value={`${fmt(profile.fullCompletionRate)}%`} helper="Сколько раз закрывает все бои" />
+          <MetricCard label="Текущая форма" value={fmt(recentFormScore)} helper="Сумма очков за последние 3 КВ" />
+        </Stack>
+
+        <Stack direction={{ xs: "column", lg: "row" }} spacing={1.2}>
+          <Paper variant="outlined" sx={{ ...cardSx, flex: 1 }}>
+            <Typography sx={{ fontWeight: 700, mb: 0.8 }}>Сильные показатели</Typography>
+            <Stack spacing={0.7}>
+              <InsightRow
+                label="Лучшая КВ"
+                value={bestWeek ? `${bestWeek.warKey} · ${bestWeek.totalContribution ?? 0} очков` : "нет данных"}
+              />
+              <InsightRow
+                label="Слабая КВ"
+                value={worstWeek ? `${worstWeek.warKey} · ${worstWeek.totalContribution ?? 0} очков` : "нет данных"}
+              />
+              <InsightRow
+                label="Колизей"
+                value={colosseumWeeks.length ? `${colosseumWeeks.length} КВ в выборке` : "нет в выборке"}
+              />
+              <InsightRow
+                label="Речная гонка"
+                value={riverRaceWeeks.length ? `${riverRaceWeeks.length} КВ в выборке` : "нет в выборке"}
+              />
+            </Stack>
+          </Paper>
+          <Paper variant="outlined" sx={{ ...cardSx, flex: 1 }}>
+            <Typography sx={{ fontWeight: 700, mb: 0.8 }}>Текущий статус игрока</Typography>
+            <Stack spacing={0.7}>
+              <InsightRow label="Статус" value={profile.activityLabel} />
+              <InsightRow label="Рейтинг активности" value={`${profile.activityScore}/100`} />
+              <InsightRow
+                label="Текущий бой"
+                value={`${profile.currentWeekBattlesPlayed}/${profile.currentWeekMaxBattles} · осталось ${profile.currentWeekBattlesRemaining}`}
+              />
+              <InsightRow
+                label="Очки за бой сейчас"
+                value={fmt(profile.currentWeekAverageContributionPerBattle)}
+              />
+            </Stack>
+          </Paper>
         </Stack>
 
         <Paper variant="outlined" sx={cardSx}>
@@ -155,6 +217,15 @@ function MetricCard({ label, value, helper }) {
       <Typography variant="h5" sx={{ fontWeight: 800, mt: 0.2 }}>{value}</Typography>
       <Typography variant="caption" color="text.secondary">{helper}</Typography>
     </Paper>
+  );
+}
+
+function InsightRow({ label, value }) {
+  return (
+    <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={0.35}>
+      <Typography variant="body2" sx={{ color: "#9ec2da" }}>{label}</Typography>
+      <Typography variant="body2" sx={{ fontWeight: 700, overflowWrap: "anywhere" }}>{value}</Typography>
+    </Stack>
   );
 }
 

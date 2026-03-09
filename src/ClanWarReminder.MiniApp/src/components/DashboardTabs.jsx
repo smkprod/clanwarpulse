@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Box, Button, Chip, Divider, LinearProgress, Paper, Stack, Tab, Tabs, TextField, Typography } from "@mui/material";
+import { Box, Button, Chip, Divider, LinearProgress, Paper, Stack, TextField, Typography } from "@mui/material";
 
 export function DashboardTabs(props) {
   const {
@@ -26,6 +26,7 @@ export function DashboardTabs(props) {
   const activeCount = dashboard.played?.length ?? 0;
   const inactiveCount = dashboard.notPlayed?.length ?? 0;
   const totalContribution = sumMembers(dashboard);
+  const currentSection = SECTION_DEFINITIONS[tab] ?? SECTION_DEFINITIONS[0];
 
   return (
     <Stack spacing={1.4}>
@@ -106,20 +107,29 @@ export function DashboardTabs(props) {
           overflow: "hidden"
         }}
       >
-        <Tabs
-          value={tab}
-          onChange={(_, value) => onTabChange(value)}
-          sx={{ mb: 1.5, display: { xs: "none", md: "flex" } }}
-          variant="scrollable"
-          scrollButtons="auto"
-        >
-          <Tab label="Активность" />
-          <Tab label="Соперники" />
-          <Tab label="Прогноз" />
-          <Tab label="История" />
-          <Tab label="Кланы" />
-          <Tab label="Telegram" />
-        </Tabs>
+        <Stack spacing={1.3}>
+          <Stack spacing={0.45}>
+            <Typography variant="body2" sx={{ color: "#9ec2da" }}>
+              Раздел
+            </Typography>
+            <Typography variant="h6">{currentSection.title}</Typography>
+            <Typography variant="body2" color="text.secondary">
+              {currentSection.description}
+            </Typography>
+          </Stack>
+          <Stack direction="row" spacing={0.8} useFlexGap flexWrap="wrap" sx={{ display: { xs: "none", md: "flex" } }}>
+            {SECTION_DEFINITIONS.map((section, index) => (
+              <Button
+                key={section.title}
+                variant={tab === index ? "contained" : "outlined"}
+                color={tab === index ? "primary" : "inherit"}
+                onClick={() => onTabChange(index)}
+              >
+                {section.title}
+              </Button>
+            ))}
+          </Stack>
+        </Stack>
         <Divider sx={{ mb: 1.5, borderColor: "rgba(132,186,217,0.18)" }} />
 
         {tab === 0 && (
@@ -157,6 +167,7 @@ export function DashboardTabs(props) {
 function ActivityTab({ dashboard, authorizedTags, onOpenPlayerProfile, busy }) {
   const authorizedSet = new Set((authorizedTags ?? []).map(normalizeTag));
   const members = [...(dashboard.played ?? []), ...(dashboard.notPlayed ?? [])];
+  const authorizedMembers = members.filter((member) => authorizedSet.has(normalizeTag(member.playerTag)));
   const totalRemaining = members.reduce((sum, m) => sum + (m.battlesRemaining ?? 0), 0);
   const totalContribution = members.reduce((sum, m) => sum + (m.totalContribution ?? 0), 0);
 
@@ -180,6 +191,17 @@ function ActivityTab({ dashboard, authorizedTags, onOpenPlayerProfile, busy }) {
           helper="Нажмите на ник, откроется профиль"
         />
       </Stack>
+      <Paper variant="outlined" sx={cardSx}>
+        <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={0.8}>
+          <Box>
+            <Typography sx={{ fontWeight: 700 }}>Анализ игроков</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Нажмите на участника, чтобы открыть его отдельную страницу со статистикой по КВ.
+            </Typography>
+          </Box>
+          <Chip color="primary" label={`Авторизованы ${authorizedMembers.length}/${members.length}`} />
+        </Stack>
+      </Paper>
       <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
         <ScrollList
           title="Сыграли"
@@ -198,6 +220,37 @@ function ActivityTab({ dashboard, authorizedTags, onOpenPlayerProfile, busy }) {
           busy={busy}
         />
       </Stack>
+      <Paper variant="outlined" sx={cardSx}>
+        <Typography sx={{ fontWeight: 700, mb: 0.8 }}>Авторизованные участники клана</Typography>
+        {authorizedMembers.length ? (
+          <Stack spacing={0.7}>
+            {authorizedMembers.map((member) => (
+              <Stack
+                key={`authorized-${member.playerTag}`}
+                direction={{ xs: "column", sm: "row" }}
+                justifyContent="space-between"
+                spacing={0.4}
+              >
+                <Button
+                  variant="text"
+                  disabled={busy}
+                  onClick={() => onOpenPlayerProfile(member.playerTag)}
+                  sx={{ justifyContent: "flex-start", px: 0, minWidth: 0, textTransform: "none", fontWeight: 700 }}
+                >
+                  {member.playerName}
+                </Button>
+                <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
+                  {member.playerTag}
+                </Typography>
+              </Stack>
+            ))}
+          </Stack>
+        ) : (
+          <Typography variant="body2" color="text.secondary">
+            Пока нет участников клана, которые авторизовались в mini app.
+          </Typography>
+        )}
+      </Paper>
     </Stack>
   );
 }
@@ -254,8 +307,6 @@ function OpponentsTab({ dashboard, identity }) {
           <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap" }} useFlexGap>
             <Chip size="small" label={`Счет ${opponent.totalScore}`} />
             <Chip size="small" color="secondary" label={`Сейчас ${opponent.periodPoints ?? 0}`} />
-            <Chip size="small" label={`Слава ${opponent.fame}`} />
-            <Chip size="small" label={`Починка ${opponent.repairPoints}`} />
             <Chip size="small" label={`Игроков ${opponent.participantsCount}`} />
           </Stack>
         </Paper>
@@ -679,3 +730,30 @@ const progressSx = {
   borderRadius: 999,
   bgcolor: "rgba(255,255,255,0.08)"
 };
+
+const SECTION_DEFINITIONS = [
+  {
+    title: "Активность",
+    description: "Текущая война, участие клана, авторизованные игроки и быстрый вход в профиль игрока."
+  },
+  {
+    title: "Соперники",
+    description: "Отдельная страница по текущим противникам, темпу гонки и сравнению кланов."
+  },
+  {
+    title: "Прогноз",
+    description: "Отдельная страница с прогнозом финиша и ожидаемой расстановкой кланов."
+  },
+  {
+    title: "История",
+    description: "История прошлых КВ и место кланов в предыдущих гонках."
+  },
+  {
+    title: "Кланы",
+    description: "Детали по каждому клану текущей гонки и лучшие участники."
+  },
+  {
+    title: "Telegram",
+    description: "Привязки Telegram, авторизации и ручное управление связями игроков."
+  }
+];

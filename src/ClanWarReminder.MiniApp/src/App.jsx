@@ -22,7 +22,7 @@ import { appTheme } from "./theme";
 initTelegramWebApp();
 
 const SESSION_STORAGE_KEY = "clanwarreminder.playerTag";
-const MOBILE_TABS = ["Home", "Members", "Opponents", "History", "Clans", "Bot"];
+const MOBILE_TABS = ["Активность", "Соперники", "Прогноз", "История", "Кланы", "Telegram"];
 
 export default function App() {
   const [playerTag, setPlayerTag] = useState("");
