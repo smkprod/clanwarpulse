@@ -119,6 +119,10 @@ public sealed record PlayerRecentClanEntry(
     string ClanTag,
     string ClanName,
     int WarBattles,
+    int TotalContribution,
+    int WarWins,
+    int WarLosses,
+    double? WarWinRate,
     DateTimeOffset FirstSeenAtUtc,
     DateTimeOffset LastSeenAtUtc);
 

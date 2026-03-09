@@ -154,12 +154,25 @@ public class PlayerWarProfileService
     {
         return weeks
             .GroupBy(x => x.ClanTag, StringComparer.OrdinalIgnoreCase)
-            .Select(group => new PlayerRecentClanEntry(
-                group.First().ClanTag,
-                group.First().ClanName,
-                group.Sum(x => x.BattlesPlayed),
-                group.Min(x => x.StartedAtUtc),
-                group.Max(x => x.EndedAtUtc)))
+            .Select(group =>
+            {
+                var wins = group.Sum(x => x.WarWins);
+                var losses = group.Sum(x => x.WarLosses);
+                double? winRate = wins + losses > 0
+                    ? Math.Round(wins * 100d / (wins + losses), 1)
+                    : null;
+
+                return new PlayerRecentClanEntry(
+                    group.First().ClanTag,
+                    group.First().ClanName,
+                    group.Sum(x => x.BattlesPlayed),
+                    group.Sum(x => x.TotalContribution ?? 0),
+                    wins,
+                    losses,
+                    winRate,
+                    group.Min(x => x.StartedAtUtc),
+                    group.Max(x => x.EndedAtUtc));
+            })
             .OrderByDescending(x => x.LastSeenAtUtc)
             .Take(12)
             .ToList();

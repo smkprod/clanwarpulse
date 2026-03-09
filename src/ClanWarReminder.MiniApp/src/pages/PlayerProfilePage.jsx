@@ -153,7 +153,10 @@ export function PlayerProfilePage({ profile, profileWindowWeeks, onWindowChange,
                   <Paper key={`${clan.clanTag}-${clan.lastSeenAtUtc}`} variant="outlined" sx={miniCardSx}>
                     <Typography variant="body2" sx={{ fontWeight: 700, overflowWrap: "anywhere" }}>{clan.clanName}</Typography>
                     <Typography variant="caption" color="text.secondary" sx={{ display: "block", overflowWrap: "anywhere" }}>
-                      {clan.clanTag} • боев {clan.warBattles} • с {formatDate(clan.firstSeenAtUtc)} по {formatDate(clan.lastSeenAtUtc)}
+                      {clan.clanTag} • боев {clan.warBattles} • очков {clan.totalContribution} • WR {fmt(clan.warWinRate ?? 0)}% ({clan.warWins}-{clan.warLosses})
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", overflowWrap: "anywhere" }}>
+                      с {formatDate(clan.firstSeenAtUtc)} по {formatDate(clan.lastSeenAtUtc)}
                     </Typography>
                   </Paper>
                 ))}
