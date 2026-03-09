@@ -285,7 +285,7 @@ app.MapGet("/miniapp/player/dashboard", async (
         var identity = await clashRoyaleClient.GetPlayerIdentityAsync(playerTag, cancellationToken);
         authorizedPlayers.MarkAuthorized(identity.PlayerTag);
         var dashboard = await statusService.GetDashboardByClanTagAsync(identity.ClanTag, cancellationToken);
-        var authorizedTags = authorizedPlayers.GetAuthorizedTagsForMembers(dashboard.Played.Concat(dashboard.NotPlayed).Select(x => x.PlayerTag));
+        var authorizedTags = authorizedPlayers.GetAuthorizedTagsForMembers(dashboard.AllMembers.Select(x => x.PlayerTag));
         var botUsername = await botProfileResolver.GetBotUsernameAsync(cancellationToken);
         var botLink = BuildBotLink(botUsername, identity.PlayerTag);
         var linkedTelegramGroupId = (await groups.GetActiveByClanTagAsync(
@@ -360,7 +360,7 @@ app.MapGet("/miniapp/telegram/sync", async (
         var identity = await clashRoyaleClient.GetPlayerIdentityAsync(playerTag, cancellationToken);
         var normalizedClanTag = TagNormalizer.NormalizeClanOrPlayerTag(identity.ClanTag);
         var dashboard = await statusService.GetDashboardByClanTagAsync(identity.ClanTag, cancellationToken);
-        var members = dashboard.Played.Concat(dashboard.NotPlayed).ToList();
+        var members = dashboard.AllMembers.ToList();
         var memberTagSet = members
             .Select(x => TagNormalizer.NormalizeClanOrPlayerTag(x.PlayerTag))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -738,7 +738,7 @@ static async Task<PlayerAuthResponse> BuildPlayerAuthResponseAsync(
         cancellationToken))?.PlatformGroupId;
 
     var dashboard = await statusService.GetDashboardByClanTagAsync(identity.ClanTag, cancellationToken);
-    var authorizedTags = authorizedPlayers.GetAuthorizedTagsForMembers(dashboard.Played.Concat(dashboard.NotPlayed).Select(x => x.PlayerTag));
+    var authorizedTags = authorizedPlayers.GetAuthorizedTagsForMembers(dashboard.AllMembers.Select(x => x.PlayerTag));
     var botUsername = await botProfileResolver.GetBotUsernameAsync(cancellationToken);
     var botLink = BuildBotLink(botUsername, identity.PlayerTag);
 

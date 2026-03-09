@@ -116,7 +116,9 @@ export function DashboardTabs(props) {
 
 function ActivityTab({ dashboard, authorizedTags, onOpenPlayerProfile, busy }) {
   const authorizedSet = new Set((authorizedTags ?? []).map(normalizeTag));
-  const members = [...(dashboard.played ?? []), ...(dashboard.notPlayed ?? [])];
+  const members = dashboard.allMembers?.length
+    ? [...dashboard.allMembers]
+    : [...(dashboard.played ?? []), ...(dashboard.notPlayed ?? [])];
   const authorizedMembers = members.filter((member) => authorizedSet.has(normalizeTag(member.playerTag)));
   const allMembers = [...members].sort((left, right) => left.playerName.localeCompare(right.playerName, "ru"));
   const totalRemaining = members.reduce((sum, member) => sum + (member.battlesRemaining ?? 0), 0);

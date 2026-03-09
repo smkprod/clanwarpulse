@@ -5,6 +5,7 @@ namespace ClanWarReminder.Application.Abstractions.Integrations;
 public interface IClashRoyaleClient
 {
     Task<ClanWarSnapshot> GetCurrentWarAsync(string clanTag, CancellationToken cancellationToken);
+    Task<IReadOnlyList<ClanWarMemberStatus>> GetClanMembersAsync(string clanTag, CancellationToken cancellationToken);
     Task<PlayerIdentityResult> GetPlayerIdentityAsync(string playerTag, CancellationToken cancellationToken);
     Task<IReadOnlyList<ClanCurrentRaceClan>> GetCurrentRaceClansAsync(string clanTag, CancellationToken cancellationToken);
     Task<IReadOnlyList<ClanWarOpponentStatus>> GetCurrentOpponentsAsync(string clanTag, CancellationToken cancellationToken);

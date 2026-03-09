@@ -38,16 +38,23 @@ public class ClanStatusService
     public async Task<ClanWarDashboard> GetDashboardByClanTagAsync(string clanTag, CancellationToken cancellationToken)
     {
         var snapshot = await _clashRoyale.GetCurrentWarAsync(clanTag, cancellationToken);
+        var roster = await _clashRoyale.GetClanMembersAsync(clanTag, cancellationToken);
         var currentRaceClans = await _clashRoyale.GetCurrentRaceClansAsync(clanTag, cancellationToken);
         var opponents = await _clashRoyale.GetCurrentOpponentsAsync(clanTag, cancellationToken);
         var history = await _clashRoyale.GetRecentHistoryAsync(clanTag, cancellationToken);
         var forecast = await _clashRoyale.BuildForecastAsync(clanTag, opponents, cancellationToken);
         var isWarActive = IsClanWarActiveNow(DateTimeOffset.UtcNow);
+        var snapshotByTag = snapshot.Members.ToDictionary(x => x.PlayerTag, StringComparer.OrdinalIgnoreCase);
+        var allMembers = roster
+            .Select(member => snapshotByTag.TryGetValue(member.PlayerTag, out var snapshotMember) ? snapshotMember : member)
+            .OrderByDescending(x => x.BattlesPlayed)
+            .ThenBy(x => x.PlayerName)
+            .ToList();
         var played = isWarActive
-            ? snapshot.Members.Where(x => x.HasPlayed).ToList()
+            ? allMembers.Where(x => x.HasPlayed).ToList()
             : new List<ClanWarMemberStatus>();
         var notPlayed = isWarActive
-            ? snapshot.Members.Where(x => !x.HasPlayed).ToList()
+            ? allMembers.Where(x => !x.HasPlayed).ToList()
             : new List<ClanWarMemberStatus>();
         var warStatusText = isWarActive
             ? "КВ идет сейчас"
@@ -67,6 +74,7 @@ public class ClanStatusService
             isWarActive,
             warStatusText,
             currentRaceClans,
+            allMembers,
             played,
             notPlayed,
             opponents,

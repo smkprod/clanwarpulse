@@ -23,7 +23,7 @@ public class ClashRoyaleClient : IClashRoyaleClient
     public async Task<ClanWarSnapshot> GetCurrentWarAsync(string clanTag, CancellationToken cancellationToken)
     {
         var payload = await GetCurrentRiverRaceAsync(clanTag, cancellationToken);
-        var clanMembers = await GetClanMembersAsync(clanTag, cancellationToken);
+        var clanMembers = await GetClanMembersRawAsync(clanTag, cancellationToken);
         const int maxBattlesPerDay = 4;
         var participantByTag = payload.Clan.Participants
             .ToDictionary(x => NormalizeTag(x.Tag), StringComparer.OrdinalIgnoreCase);
@@ -93,6 +93,22 @@ public class ClashRoyaleClient : IClashRoyaleClient
         .ToList();
 
         return new ClanWarSnapshot(BuildWarKey(payload), members);
+    }
+
+    public async Task<IReadOnlyList<ClanWarMemberStatus>> GetClanMembersAsync(string clanTag, CancellationToken cancellationToken)
+    {
+        var members = await GetClanMembersRawAsync(clanTag, cancellationToken);
+        return members
+            .Select(member => new ClanWarMemberStatus(
+                NormalizeTag(member.Tag),
+                member.Name,
+                false,
+                0,
+                0,
+                0,
+                0))
+            .OrderBy(member => member.PlayerName)
+            .ToList();
     }
 
     public async Task<PlayerIdentityResult> GetPlayerIdentityAsync(string playerTag, CancellationToken cancellationToken)
@@ -476,7 +492,7 @@ public class ClashRoyaleClient : IClashRoyaleClient
             ?? new List<PlayerBattleLogEntryDto>();
     }
 
-    private async Task<List<ClanMemberDto>> GetClanMembersAsync(string clanTag, CancellationToken cancellationToken)
+    private async Task<List<ClanMemberDto>> GetClanMembersRawAsync(string clanTag, CancellationToken cancellationToken)
     {
         var encodedTag = Uri.EscapeDataString(NormalizeTag(clanTag));
         using var request = CreateRequest(HttpMethod.Get, $"{_options.BaseUrl}/clans/{encodedTag}/members");
