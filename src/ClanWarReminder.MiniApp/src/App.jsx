@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
-  BottomNavigation,
-  BottomNavigationAction,
   Box,
+  Button,
   CircularProgress,
   Container,
   CssBaseline,
@@ -22,7 +21,7 @@ import { appTheme } from "./theme";
 initTelegramWebApp();
 
 const SESSION_STORAGE_KEY = "clanwarreminder.playerTag";
-const MOBILE_TABS = ["Активность", "Соперники", "Прогноз", "История", "Кланы", "Telegram"];
+const MOBILE_TABS = ["КВ", "Враги", "Прогноз", "История", "Кланы", "TG"];
 
 export default function App() {
   const [playerTag, setPlayerTag] = useState("");
@@ -323,11 +322,21 @@ export default function App() {
                 overflow: "hidden"
               }}
             >
-              <BottomNavigation showLabels value={tab} onChange={(_, value) => setTab(value)}>
-                {MOBILE_TABS.map((label, index) => (
-                  <BottomNavigationAction key={label} label={label} value={index} />
-                ))}
-              </BottomNavigation>
+              <Box sx={{ overflowX: "auto", px: 0.8, py: 0.8 }}>
+                <Stack direction="row" spacing={0.8} sx={{ minWidth: "max-content" }}>
+                  {MOBILE_TABS.map((label, index) => (
+                    <Button
+                      key={label}
+                      size="small"
+                      variant={tab === index ? "contained" : "outlined"}
+                      onClick={() => setTab(index)}
+                      sx={{ minWidth: 72, px: 1.2, whiteSpace: "nowrap", flexShrink: 0 }}
+                    >
+                      {label}
+                    </Button>
+                  ))}
+                </Stack>
+              </Box>
             </Paper>
           </>
         )}
