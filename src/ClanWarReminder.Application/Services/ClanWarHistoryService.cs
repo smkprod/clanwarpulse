@@ -51,8 +51,17 @@ public class ClanWarHistoryService
     private static DateTimeOffset StartOfWarWeek(DateTimeOffset value)
     {
         var utc = value.ToUniversalTime();
-        var day = utc.DayOfWeek == DayOfWeek.Sunday ? 7 : (int)utc.DayOfWeek;
-        var weekStart = utc.UtcDateTime.Date.AddDays(1 - day);
+        var offset = utc.DayOfWeek switch
+        {
+            DayOfWeek.Thursday => 0,
+            DayOfWeek.Friday => 1,
+            DayOfWeek.Saturday => 2,
+            DayOfWeek.Sunday => 3,
+            DayOfWeek.Monday => 4,
+            DayOfWeek.Tuesday => 5,
+            _ => 6
+        };
+        var weekStart = utc.UtcDateTime.Date.AddDays(-offset);
         return new DateTimeOffset(weekStart, TimeSpan.Zero);
     }
 }

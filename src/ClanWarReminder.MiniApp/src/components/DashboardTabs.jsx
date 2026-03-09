@@ -15,6 +15,7 @@ export function DashboardTabs(props) {
           <InfoChip text={`Игрок ${identity.playerName}`} />
           <InfoChip text={`Клан ${identity.clanName}`} color="primary" />
           <InfoChip text={`Война ${dashboard.warKey}`} color="secondary" />
+          <InfoChip text={dashboard.warStatusText} color={dashboard.isWarActive ? "success" : "warning"} />
         </Stack>
         <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
           <Button variant="outlined" onClick={onRefresh} disabled={busy}>Обновить</Button>
@@ -51,6 +52,14 @@ function ActivityTab({ dashboard, authorizedTags, onOpenPlayerProfile, busy }) {
 
   return (
     <Stack spacing={1.2}>
+      {!dashboard.isWarActive && (
+        <Paper variant="outlined" sx={cardSx}>
+          <Typography sx={{ fontWeight: 700, mb: 0.4 }}>КВ сейчас не идет</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Тренировочные дни не считаются. Бои и список "не сыграли" появятся только в окне с четверга до утра понедельника.
+          </Typography>
+        </Paper>
+      )}
       <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
         <MetricCard label="Осталось боев" value={totalRemaining} helper="Суммарно по клану" />
         <MetricCard label="Очки клана" value={totalContribution} helper="Текущий вклад по КВ" />

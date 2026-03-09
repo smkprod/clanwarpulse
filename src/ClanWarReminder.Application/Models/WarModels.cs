@@ -82,6 +82,8 @@ public sealed record ClanWarDashboard(
     string ClanTag,
     string ClanName,
     string WarKey,
+    bool IsWarActive,
+    string WarStatusText,
     IReadOnlyList<ClanCurrentRaceClan> CurrentRaceClans,
     IReadOnlyList<ClanWarMemberStatus> Played,
     IReadOnlyList<ClanWarMemberStatus> NotPlayed,
