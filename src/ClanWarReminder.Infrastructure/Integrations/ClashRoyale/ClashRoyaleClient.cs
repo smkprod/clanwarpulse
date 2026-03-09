@@ -283,9 +283,9 @@ public class ClashRoyaleClient : IClashRoyaleClient
             recentWars);
     }
 
-    public async Task<PlayerWarProfile> GetPlayerWarProfileAsync(string playerTag, CancellationToken cancellationToken)
+    public async Task<PlayerWarProfile> GetPlayerWarProfileAsync(string playerTag, int windowWeeks, CancellationToken cancellationToken)
     {
-        const int profileWindowWeeks = 5;
+        var profileWindowWeeks = Math.Clamp(windowWeeks, 1, 10);
         var identity = await GetPlayerIdentityAsync(playerTag, cancellationToken);
         var currentRace = await GetCurrentRiverRaceAsync(identity.ClanTag, cancellationToken);
         var currentParticipant = currentRace.Clan.Participants
@@ -399,13 +399,15 @@ public class ClashRoyaleClient : IClashRoyaleClient
 
         var averageBattlesPerWeek = Math.Round(trackedWeeks.Average(x => x.BattlesPlayed), 1);
         var overallParticipationRate = Math.Round(trackedWeeks.Average(x => x.ParticipationRate), 1);
-        var fullCompletionRate = Math.Round(trackedWeeks.Count(x => x.CompletedAllBattles) * 100d / trackedWeeks.Count, 1);
         var activityScore = BuildActivityScore(trackedWeeks);
-        var activityLabel = activityScore >= 75
-            ? "Активный"
-            : activityScore >= 45
-                ? "Нестабильный"
-                : "Пассивный";
+        var hasMeaningfulHistory = trackedWeeks.Any(x => x.BattlesPlayed > 0 || (x.TotalContribution ?? 0) > 0);
+        var activityLabel = !hasMeaningfulHistory
+            ? "Нет данных"
+            : overallParticipationRate >= 40
+                ? "Активный"
+                : activityScore >= 25
+                    ? "Нестабильный"
+                    : "Пассивный";
         var weightedBattles = trackedWeeks
             .Select((week, index) => new
             {
@@ -456,7 +458,7 @@ public class ClashRoyaleClient : IClashRoyaleClient
             currentWeekContribution,
             currentWeekAverage,
             overallParticipationRate,
-            fullCompletionRate,
+            0,
             trackedWeeks.Sum(x => x.BattlesPlayed),
             averageBattlesPerWeek,
             activityScore,

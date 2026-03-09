@@ -31,6 +31,7 @@ export default function App() {
   const [telegramSync, setTelegramSync] = useState(null);
   const [playerProfile, setPlayerProfile] = useState(null);
   const [currentView, setCurrentView] = useState("dashboard");
+  const [profileWindowWeeks, setProfileWindowWeeks] = useState(5);
 
   const titleLine = useMemo(() => {
     if (!session) {
@@ -179,19 +180,19 @@ export default function App() {
     setTelegramSync(data);
   }
 
-  async function loadPlayerProfile(sourcePlayerTag = null) {
+  async function loadPlayerProfile(sourcePlayerTag = null, windowWeeks = profileWindowWeeks) {
     const tag = sourcePlayerTag ?? session?.identity?.playerTag;
     if (!tag) {
       return;
     }
 
-    const data = await apiGet(`/miniapp/player/profile?playerTag=${encodeURIComponent(tag)}`);
+    const data = await apiGet(`/miniapp/player/profile?playerTag=${encodeURIComponent(tag)}&windowWeeks=${encodeURIComponent(windowWeeks)}`);
     setPlayerProfile(data);
   }
 
   async function openPlayerProfile(tag) {
     await runBusy(async () => {
-      await loadPlayerProfile(tag);
+      await loadPlayerProfile(tag, profileWindowWeeks);
       setCurrentView("player");
     });
   }
@@ -283,8 +284,13 @@ export default function App() {
         {session && currentView === "player" && (
           <PlayerProfilePage
             profile={playerProfile}
+            profileWindowWeeks={profileWindowWeeks}
+            onWindowChange={(value) => {
+              setProfileWindowWeeks(value);
+              return runBusy(() => loadPlayerProfile(playerProfile?.playerTag ?? session.identity.playerTag, value));
+            }}
             onBack={() => setCurrentView("dashboard")}
-            onRefresh={() => runBusy(() => loadPlayerProfile(playerProfile?.playerTag ?? session.identity.playerTag))}
+            onRefresh={() => runBusy(() => loadPlayerProfile(playerProfile?.playerTag ?? session.identity.playerTag, profileWindowWeeks))}
             busy={busy}
           />
         )}

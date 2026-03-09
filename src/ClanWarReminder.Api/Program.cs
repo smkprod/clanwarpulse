@@ -262,12 +262,13 @@ app.MapGet("/miniapp/player/dashboard", async (
 
 app.MapGet("/miniapp/player/profile", async (
     string playerTag,
+    int? windowWeeks,
     IClashRoyaleClient clashRoyaleClient,
     CancellationToken cancellationToken) =>
 {
     try
     {
-        var profile = await clashRoyaleClient.GetPlayerWarProfileAsync(playerTag, cancellationToken);
+        var profile = await clashRoyaleClient.GetPlayerWarProfileAsync(playerTag, windowWeeks ?? 5, cancellationToken);
         return Results.Ok(profile);
     }
     catch (Exception ex) when (TryMapClashRoyaleError(ex, out var message))

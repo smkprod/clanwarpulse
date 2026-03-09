@@ -1,6 +1,6 @@
-import { Box, Button, Chip, LinearProgress, Paper, Stack, Typography } from "@mui/material";
+import { Box, Button, Chip, LinearProgress, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
 
-export function PlayerProfilePage({ profile, onBack, onRefresh, busy }) {
+export function PlayerProfilePage({ profile, profileWindowWeeks, onWindowChange, onBack, onRefresh, busy }) {
   if (!profile) {
     return (
       <Paper elevation={0} sx={shellSx}>
@@ -17,7 +17,23 @@ export function PlayerProfilePage({ profile, onBack, onRefresh, busy }) {
       <Stack spacing={1.2}>
         <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={1}>
           <Button variant="outlined" onClick={onBack} sx={{ alignSelf: "flex-start" }}>Назад к клану</Button>
-          <Button variant="contained" onClick={onRefresh} disabled={busy} sx={{ alignSelf: "flex-start" }}>Обновить профиль</Button>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ alignSelf: "flex-start" }}>
+            <TextField
+              select
+              size="small"
+              label="Диапазон КВ"
+              value={profileWindowWeeks}
+              onChange={(e) => onWindowChange(Number(e.target.value))}
+              sx={{ minWidth: 140 }}
+            >
+              {[3, 5, 7, 10].map((value) => (
+                <MenuItem key={value} value={value}>
+                  Последние {value}
+                </MenuItem>
+              ))}
+            </TextField>
+            <Button variant="contained" onClick={onRefresh} disabled={busy} sx={{ alignSelf: "flex-start" }}>Обновить профиль</Button>
+          </Stack>
         </Stack>
 
         <Paper variant="outlined" sx={cardSx}>
@@ -27,7 +43,7 @@ export function PlayerProfilePage({ profile, onBack, onRefresh, busy }) {
               <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>{profile.playerTag} • {profile.currentClanName} • {profile.currentClanTag}</Typography>
             </Box>
             <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-              <InfoChip text={`Статус ${profile.activityLabel}`} color={profile.activityScore >= 75 ? "success" : profile.activityScore >= 45 ? "warning" : "default"} />
+              <InfoChip text={`Статус ${profile.activityLabel}`} color={profile.activityLabel === "Активный" ? "success" : profile.activityLabel === "Нестабильный" ? "warning" : "default"} />
               <InfoChip text={`Рейтинг ${profile.activityScore}/100`} color="primary" />
               <InfoChip text={`Окно ${profile.profileWindowWeeks} КВ`} />
             </Stack>
@@ -35,10 +51,10 @@ export function PlayerProfilePage({ profile, onBack, onRefresh, busy }) {
         </Paper>
 
         <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
-          <MetricCard label="Участие" value={`${fmt(profile.overallParticipationRate)}%`} helper="Только по последним 5 КВ" />
-          <MetricCard label="Не пропускает" value={`${fmt(profile.fullCompletionRate)}%`} helper="Полное закрытие 16 боев" />
+          <MetricCard label="Участие" value={`${fmt(profile.overallParticipationRate)}%`} helper={`Только по последним ${profile.profileWindowWeeks} КВ`} />
           <MetricCard label="Среднее боев" value={fmt(profile.averageBattlesPerWeek)} helper={`Всего учтено боев ${profile.totalTrackedWarBattles}`} />
           <MetricCard label="Прогноз" value={`${profile.predictedNextWeekBattles}/16`} helper={`${profile.predictedNextWeekContribution} очков в следующем КВ`} />
+          <MetricCard label="Сейчас" value={`${profile.currentWeekBattlesPlayed}/16`} helper={`${profile.currentWeekContribution} очков в текущем КВ`} />
         </Stack>
 
         <Paper variant="outlined" sx={cardSx}>

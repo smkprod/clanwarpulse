@@ -11,5 +11,5 @@ public interface IClashRoyaleClient
     Task<ClanWarForecastResult> BuildForecastAsync(string clanTag, IReadOnlyList<ClanWarOpponentStatus> currentOpponents, CancellationToken cancellationToken);
     Task<IReadOnlyList<ClanWarHistoryEntry>> GetRecentHistoryAsync(string clanTag, CancellationToken cancellationToken);
     Task<ClanWarClanDetails> GetClanDetailsAsync(string clanTag, CancellationToken cancellationToken);
-    Task<PlayerWarProfile> GetPlayerWarProfileAsync(string playerTag, CancellationToken cancellationToken);
+    Task<PlayerWarProfile> GetPlayerWarProfileAsync(string playerTag, int windowWeeks, CancellationToken cancellationToken);
 }
