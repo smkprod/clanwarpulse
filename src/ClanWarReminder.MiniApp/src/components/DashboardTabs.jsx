@@ -4,7 +4,7 @@ import { Box, Button, Chip, Divider, LinearProgress, Paper, Stack, Tab, Tabs, Te
 export function DashboardTabs(props) {
   const {
     tab, onTabChange, dashboard, authorizedTags, selectedClanTag, clanDetails, onRefresh, onLoadClanDetails,
-    onOpenBot, hasBotLink, onNotifyNotPlayed, canNotifyNotPlayed, telegramSync, playerProfile, onLoadPlayerProfile,
+    onOpenBot, hasBotLink, onNotifyNotPlayed, canNotifyNotPlayed, telegramSync, onOpenPlayerProfile,
     onLoadTelegramSync, onRelinkTelegramUser, busy, identity
   } = props;
 
@@ -33,7 +33,7 @@ export function DashboardTabs(props) {
       </Tabs>
       <Divider sx={{ mb: 1.5, borderColor: "rgba(132,186,217,0.18)" }} />
 
-      {tab === 0 && <ActivityTab dashboard={dashboard} authorizedTags={authorizedTags} playerProfile={playerProfile} onLoadPlayerProfile={onLoadPlayerProfile} busy={busy} />}
+      {tab === 0 && <ActivityTab dashboard={dashboard} authorizedTags={authorizedTags} onOpenPlayerProfile={onOpenPlayerProfile} busy={busy} />}
       {tab === 1 && <OpponentsTab dashboard={dashboard} identity={identity} />}
       {tab === 2 && <ForecastTab dashboard={dashboard} />}
       {tab === 3 && <HistoryTab dashboard={dashboard} />}
@@ -43,7 +43,7 @@ export function DashboardTabs(props) {
   );
 }
 
-function ActivityTab({ dashboard, authorizedTags, playerProfile, onLoadPlayerProfile, busy }) {
+function ActivityTab({ dashboard, authorizedTags, onOpenPlayerProfile, busy }) {
   const authorizedSet = new Set((authorizedTags ?? []).map(normalizeTag));
   const members = [...(dashboard.played ?? []), ...(dashboard.notPlayed ?? [])];
   const totalRemaining = members.reduce((sum, m) => sum + (m.battlesRemaining ?? 0), 0);
@@ -54,105 +54,12 @@ function ActivityTab({ dashboard, authorizedTags, playerProfile, onLoadPlayerPro
       <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
         <MetricCard label="Осталось боев" value={totalRemaining} helper="Суммарно по клану" />
         <MetricCard label="Очки клана" value={totalContribution} helper="Текущий вклад по КВ" />
-        <MetricCard label="Игроков в бою" value={`${dashboard.played?.length ?? 0}/${members.length}`} helper="Нажмите на ник игрока" />
+        <MetricCard label="Игроков в бою" value={`${dashboard.played?.length ?? 0}/${members.length}`} helper="Нажмите на ник, откроется отдельная страница" />
       </Stack>
       <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
-        <ScrollList title="Сыграли" members={dashboard.played} emptyText="Пока никто не сыграл." authorizedSet={authorizedSet} selectedPlayerTag={playerProfile?.playerTag} onSelectPlayer={onLoadPlayerProfile} busy={busy} />
-        <ScrollList title="Не сыграли" members={dashboard.notPlayed} emptyText="Все уже сыграли." authorizedSet={authorizedSet} selectedPlayerTag={playerProfile?.playerTag} onSelectPlayer={onLoadPlayerProfile} busy={busy} />
+        <ScrollList title="Сыграли" members={dashboard.played} emptyText="Пока никто не сыграл." authorizedSet={authorizedSet} onSelectPlayer={onOpenPlayerProfile} busy={busy} />
+        <ScrollList title="Не сыграли" members={dashboard.notPlayed} emptyText="Все уже сыграли." authorizedSet={authorizedSet} onSelectPlayer={onOpenPlayerProfile} busy={busy} />
       </Stack>
-      <PlayerProfileCard profile={playerProfile} />
-    </Stack>
-  );
-}
-
-function PlayerProfileCard({ profile }) {
-  if (!profile) {
-    return <Paper variant="outlined" sx={cardSx}><Typography color="text.secondary">Выберите игрока в списке, чтобы открыть его статистику КВ.</Typography></Paper>;
-  }
-
-  return (
-    <Paper variant="outlined" sx={cardSx}>
-      <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={1}>
-        <Box sx={{ minWidth: 0 }}>
-          <Typography sx={{ fontWeight: 800, fontSize: "1.1rem", overflowWrap: "anywhere" }}>{profile.playerName}</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>{profile.playerTag} • {profile.currentClanName} • {profile.currentClanTag}</Typography>
-        </Box>
-        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-          <InfoChip text={`Очки сейчас ${profile.currentWeekContribution}`} color="primary" />
-          <InfoChip text={`Среднее ${fmt(profile.currentWeekAverageContributionPerBattle)}/бой`} />
-          <InfoChip text={`Прогноз ${profile.predictedNextWeekContribution}`} color="secondary" />
-        </Stack>
-      </Stack>
-
-      <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ mt: 1.2 }}>
-        <MetricCard label="Участие" value={`${fmt(profile.overallParticipationRate)}%`} helper="Из 16 боев за КВ" />
-        <MetricCard label="Не пропускает" value={`${fmt(profile.fullCompletionRate)}%`} helper="КВ с полным закрытием 16 боев" />
-        <MetricCard label="Среднее боев" value={fmt(profile.averageBattlesPerWeek)} helper={`Всего боев ${profile.totalTrackedWarBattles}`} />
-        <MetricCard label="Следующий КВ" value={`${profile.predictedNextWeekBattles}/16`} helper="Ожидаемая активность" />
-      </Stack>
-
-      <Stack direction={{ xs: "column", lg: "row" }} spacing={1.2} sx={{ mt: 1.2 }}>
-        <Paper variant="outlined" sx={{ ...innerCardSx, flex: 1.2 }}>
-          <Typography sx={{ fontWeight: 700, mb: 0.8 }}>График последних КВ</Typography>
-          <TrendChart weeks={profile.recentWeeks ?? []} />
-        </Paper>
-        <Paper variant="outlined" sx={{ ...innerCardSx, flex: 1 }}>
-          <Typography sx={{ fontWeight: 700, mb: 0.8 }}>Последние кланы</Typography>
-          {(profile.recentClans ?? []).length ? (
-            <Stack spacing={0.7}>
-              {profile.recentClans.map((clan) => (
-                <Paper key={`${clan.clanTag}-${clan.lastSeenAtUtc}`} variant="outlined" sx={{ p: 0.8, borderColor: "rgba(132,186,217,0.14)", bgcolor: "rgba(8,19,29,0.58)" }}>
-                  <Typography variant="body2" sx={{ fontWeight: 700, overflowWrap: "anywhere" }}>{clan.clanName}</Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", overflowWrap: "anywhere" }}>{clan.clanTag} • боев {clan.warBattles} • до {formatDate(clan.lastSeenAtUtc)}</Typography>
-                </Paper>
-              ))}
-            </Stack>
-          ) : <Typography color="text.secondary">История кланов пока недоступна.</Typography>}
-        </Paper>
-      </Stack>
-
-      <Paper variant="outlined" sx={{ ...innerCardSx, mt: 1.2 }}>
-        <Typography sx={{ fontWeight: 700, mb: 0.8 }}>Недавние войны</Typography>
-        {(profile.recentWeeks ?? []).length ? (
-          <Stack spacing={0.8}>
-            {profile.recentWeeks.map((week) => (
-              <Box key={`${week.warKey}-${week.clanTag}`}>
-                <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={0.4}>
-                  <Typography variant="body2" sx={{ fontWeight: 700, overflowWrap: "anywhere" }}>{week.warKey} • {week.clanName}</Typography>
-                  <Typography variant="body2" color="text.secondary">{week.battlesPlayed}/{week.maxBattles} • {fmt(week.participationRate)}%{week.totalContribution != null ? ` • ${week.totalContribution} очков` : ""}</Typography>
-                </Stack>
-                <LinearProgress variant="determinate" value={Math.min(100, week.participationRate)} sx={progressSx} />
-              </Box>
-            ))}
-          </Stack>
-        ) : <Typography color="text.secondary">Недостаточно истории боев для профиля КВ.</Typography>}
-      </Paper>
-    </Paper>
-  );
-}
-
-function TrendChart({ weeks }) {
-  if (!weeks.length) {
-    return <Typography color="text.secondary">Нет данных для графика.</Typography>;
-  }
-
-  const ordered = [...weeks].reverse();
-  const maxContribution = Math.max(...ordered.map((x) => x.totalContribution ?? 0), 1);
-  return (
-    <Stack spacing={1}>
-      {ordered.map((week) => (
-        <Box key={`${week.warKey}-${week.clanTag}`}>
-          <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={0.3}>
-            <Typography variant="body2">{week.warKey}</Typography>
-            <Typography variant="caption" color="text.secondary">{week.totalContribution != null ? `${week.totalContribution} очков` : "очки недоступны"} • {week.battlesPlayed}/16</Typography>
-          </Stack>
-          <Stack direction="row" spacing={0.7} sx={{ mt: 0.45 }}>
-            <Box sx={{ flex: 1 }}><LinearProgress variant="determinate" value={Math.min(100, ((week.totalContribution ?? 0) / maxContribution) * 100)} sx={progressSx} /></Box>
-            <Box sx={{ flex: 1 }}><LinearProgress color="secondary" variant="determinate" value={Math.min(100, (week.battlesPlayed / 16) * 100)} sx={progressSx} /></Box>
-          </Stack>
-        </Box>
-      ))}
-      <Typography variant="caption" color="text.secondary">Слева направо: очки КВ и сыгранные бои.</Typography>
     </Stack>
   );
 }
@@ -264,11 +171,11 @@ function TelegramSyncTab({ sync, onReload, onRelink, busy }) {
   );
 }
 
-function ScrollList({ title, members, emptyText, authorizedSet, selectedPlayerTag, onSelectPlayer, busy }) {
+function ScrollList({ title, members, emptyText, authorizedSet, onSelectPlayer, busy }) {
   return (
     <Paper variant="outlined" sx={{ flex: 1, minWidth: 0, borderColor: "rgba(132,186,217,0.2)", bgcolor: "rgba(6,17,27,0.6)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <Box sx={{ px: 1.2, py: 1, borderBottom: "1px solid rgba(132,186,217,0.2)" }}><Typography variant="subtitle2">{title}</Typography></Box>
-      <Box sx={{ maxHeight: 320, overflowY: "auto", px: 1.2, py: 0.8 }}>{members?.length ? <Stack spacing={0.8}>{members.map((member) => { const normalized = normalizeTag(member.playerTag); const isSelected = normalizeTag(selectedPlayerTag) === normalized; return <Paper key={`${member.playerTag}-${title}`} variant="outlined" sx={{ p: 0.9, borderColor: isSelected ? "rgba(77,208,225,0.8)" : "rgba(132,186,217,0.2)", bgcolor: isSelected ? "rgba(15,40,54,0.9)" : "rgba(10,24,37,0.65)", overflow: "hidden" }}><Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={0.4}><Button variant="text" disabled={busy} onClick={() => onSelectPlayer(member.playerTag)} sx={{ justifyContent: "flex-start", px: 0, minWidth: 0, textTransform: "none", fontWeight: 700, overflowWrap: "anywhere" }}>{member.playerName} {authorizedSet.has(normalized) ? "[авторизован]" : ""}</Button><Typography variant="body2" color="text.secondary">осталось {member.battlesRemaining ?? 0}</Typography></Stack><Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>{member.playerTag} | сыграно {member.battlesPlayed ?? 0}/4{member.totalContribution != null ? ` | очки ${member.totalContribution}` : ""}</Typography><LinearProgress variant="determinate" value={Math.min(100, ((member.battlesPlayed ?? 0) / 4) * 100)} sx={progressSx} /></Paper>; })}</Stack> : <Typography variant="body2" color="text.secondary">{emptyText}</Typography>}</Box>
+      <Box sx={{ maxHeight: 320, overflowY: "auto", px: 1.2, py: 0.8 }}>{members?.length ? <Stack spacing={0.8}>{members.map((member) => { const normalized = normalizeTag(member.playerTag); return <Paper key={`${member.playerTag}-${title}`} variant="outlined" sx={{ p: 0.9, borderColor: "rgba(132,186,217,0.2)", bgcolor: "rgba(10,24,37,0.65)", overflow: "hidden" }}><Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={0.4}><Button variant="text" disabled={busy} onClick={() => onSelectPlayer(member.playerTag)} sx={{ justifyContent: "flex-start", px: 0, minWidth: 0, textTransform: "none", fontWeight: 700, overflowWrap: "anywhere" }}>{member.playerName} {authorizedSet.has(normalized) ? "[авторизован]" : ""}</Button><Typography variant="body2" color="text.secondary">осталось {member.battlesRemaining ?? 0}</Typography></Stack><Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>{member.playerTag} | сыграно {member.battlesPlayed ?? 0}/4{member.totalContribution != null ? ` | очки ${member.totalContribution}` : ""}</Typography><LinearProgress variant="determinate" value={Math.min(100, ((member.battlesPlayed ?? 0) / 4) * 100)} sx={progressSx} /></Paper>; })}</Stack> : <Typography variant="body2" color="text.secondary">{emptyText}</Typography>}</Box>
     </Paper>
   );
 }
@@ -282,9 +189,5 @@ function InfoChip({ text, color }) {
 }
 
 function normalizeTag(tag) { const value = String(tag ?? "").trim().toUpperCase(); return value.startsWith("#") ? value : `#${value}`; }
-function fmt(value) { const number = Number(value ?? 0); return Number.isInteger(number) ? String(number) : number.toFixed(1); }
-function formatDate(value) { const date = new Date(value); return Number.isNaN(date.getTime()) ? String(value) : new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" }).format(date); }
-
 const cardSx = { p: 1.2, borderColor: "rgba(132,186,217,0.2)", bgcolor: "rgba(6,17,27,0.6)", overflow: "hidden" };
-const innerCardSx = { p: 1.1, borderColor: "rgba(132,186,217,0.18)", bgcolor: "rgba(10,24,37,0.62)" };
 const progressSx = { mt: 0.45, height: 8, borderRadius: 999, bgcolor: "rgba(255,255,255,0.08)" };

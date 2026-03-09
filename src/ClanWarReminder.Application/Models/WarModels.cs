@@ -101,6 +101,7 @@ public sealed record PlayerWarWeekSummary(
     DateTimeOffset EndedAtUtc,
     string ClanTag,
     string ClanName,
+    bool IsColosseumWeighted,
     int BattlesPlayed,
     int MaxBattles,
     double ParticipationRate,
@@ -120,6 +121,7 @@ public sealed record PlayerWarProfile(
     string PlayerName,
     string CurrentClanTag,
     string CurrentClanName,
+    int ProfileWindowWeeks,
     int CurrentWeekBattlesPlayed,
     int CurrentWeekMaxBattles,
     int CurrentWeekBattlesRemaining,
@@ -129,10 +131,14 @@ public sealed record PlayerWarProfile(
     double FullCompletionRate,
     int TotalTrackedWarBattles,
     double AverageBattlesPerWeek,
+    int ActivityScore,
+    string ActivityLabel,
     int PredictedNextWeekBattles,
     int PredictedNextWeekContribution,
     IReadOnlyList<PlayerWarWeekSummary> RecentWeeks,
-    IReadOnlyList<PlayerRecentClanEntry> RecentClans);
+    IReadOnlyList<PlayerRecentClanEntry> RecentClans,
+    int AvailableClanHistoryEntries,
+    string ClanHistoryNote);
 
 public sealed record ReminderMessage(
     PlatformType Platform,

@@ -12,6 +12,7 @@ import {
 import { apiGet, apiPost } from "./api/client";
 import { SignInPage } from "./pages/SignInPage";
 import { DashboardPage } from "./pages/DashboardPage";
+import { PlayerProfilePage } from "./pages/PlayerProfilePage";
 import { getTelegramChatId, getTelegramInitData, initTelegramWebApp, notify, openBotLink } from "./lib/telegram";
 import { appTheme } from "./theme";
 
@@ -29,6 +30,7 @@ export default function App() {
   const [clanDetails, setClanDetails] = useState(null);
   const [telegramSync, setTelegramSync] = useState(null);
   const [playerProfile, setPlayerProfile] = useState(null);
+  const [currentView, setCurrentView] = useState("dashboard");
 
   const titleLine = useMemo(() => {
     if (!session) {
@@ -73,6 +75,7 @@ export default function App() {
         window.localStorage.setItem(SESSION_STORAGE_KEY, data.session.identity.playerTag);
         await loadTelegramSync(data.session.identity.playerTag);
         await loadPlayerProfile(data.session.identity.playerTag);
+        setCurrentView("dashboard");
         setFeedback({ text: `Автоматически восстановлен вход для ${data.session.identity.playerName}.`, severity: "success" });
       } catch (error) {
         if (!cancelled) {
@@ -106,6 +109,7 @@ export default function App() {
       setSelectedClanTag("");
       await loadTelegramSync(data.identity.playerTag);
       await loadPlayerProfile(data.identity.playerTag);
+      setCurrentView("dashboard");
       setFeedback({ text: `Загружен игрок ${data.identity.playerName} (${data.identity.playerTag})`, severity: "success" });
       notify("success");
     });
@@ -124,6 +128,7 @@ export default function App() {
       setSelectedClanTag("");
       await loadTelegramSync(data.identity.playerTag);
       await loadPlayerProfile(data.identity.playerTag);
+      setCurrentView("dashboard");
       setFeedback({ text: "Данные войны клана обновлены.", severity: "success" });
       notify("success");
     });
@@ -182,6 +187,13 @@ export default function App() {
 
     const data = await apiGet(`/miniapp/player/profile?playerTag=${encodeURIComponent(tag)}`);
     setPlayerProfile(data);
+  }
+
+  async function openPlayerProfile(tag) {
+    await runBusy(async () => {
+      await loadPlayerProfile(tag);
+      setCurrentView("player");
+    });
   }
 
   async function relinkTelegramUser(platformUserId, displayName, targetPlayerTag) {
@@ -244,7 +256,7 @@ export default function App() {
           />
         )}
 
-        {session && (
+        {session && currentView === "dashboard" && (
           <DashboardPage
             tab={tab}
             onTabChange={setTab}
@@ -261,9 +273,18 @@ export default function App() {
             canNotifyNotPlayed={Boolean(session.linkedTelegramGroupId)}
             telegramSync={telegramSync}
             playerProfile={playerProfile}
-            onLoadPlayerProfile={(tag) => runBusy(() => loadPlayerProfile(tag))}
+            onOpenPlayerProfile={openPlayerProfile}
             onLoadTelegramSync={() => runBusy(() => loadTelegramSync(session.identity.playerTag))}
             onRelinkTelegramUser={relinkTelegramUser}
+            busy={busy}
+          />
+        )}
+
+        {session && currentView === "player" && (
+          <PlayerProfilePage
+            profile={playerProfile}
+            onBack={() => setCurrentView("dashboard")}
+            onRefresh={() => runBusy(() => loadPlayerProfile(playerProfile?.playerTag ?? session.identity.playerTag))}
             busy={busy}
           />
         )}
