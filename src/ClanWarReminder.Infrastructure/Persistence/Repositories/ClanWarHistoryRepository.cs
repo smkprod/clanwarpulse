@@ -82,6 +82,7 @@ public class ClanWarHistoryRepository : IClanWarHistoryRepository
         return await _db.ClanWarWeekMembers
             .AsNoTracking()
             .Where(x => x.PlayerTag == normalizedPlayerTag)
+            .OrderByDescending(x => x.ClanWarWeek.StartedAtUtc)
             .Select(x => new StoredPlayerWarWeek(
                 x.ClanWarWeek.WarKey,
                 x.ClanWarWeek.StartedAtUtc,
@@ -92,7 +93,6 @@ public class ClanWarHistoryRepository : IClanWarHistoryRepository
                 x.MaxBattles,
                 x.TotalContribution,
                 x.AverageContributionPerBattle))
-            .OrderByDescending(x => x.StartedAtUtc)
             .ToListAsync(cancellationToken);
     }
 }
