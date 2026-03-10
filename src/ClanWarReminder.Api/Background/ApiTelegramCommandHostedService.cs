@@ -43,6 +43,7 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
         {
             try
             {
+                await EnsureBotCommandsRegisteredAsync(http, botToken!, stoppingToken);
                 await EnsureWebhookReadyAsync(http, botToken!, webhookUrl, stoppingToken);
                 _logger.LogInformation("Telegram webhook mode enabled: {WebhookUrl}", webhookUrl);
                 return;
@@ -55,6 +56,7 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
 
         try
         {
+            await EnsureBotCommandsRegisteredAsync(http, botToken!, stoppingToken);
             await EnsurePollingReadyAsync(http, botToken!, stoppingToken);
         }
         catch (Exception ex)
@@ -161,6 +163,32 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
         }
     }
 
+    private async Task EnsureBotCommandsRegisteredAsync(HttpClient http, string token, CancellationToken cancellationToken)
+    {
+        var payload = new TelegramSetMyCommandsRequest(
+            new List<TelegramBotCommandDto>
+            {
+                new("start", "Start the bot"),
+                new("help", "Show help"),
+                new("ping", "Bot health check"),
+                new("setup", "Bind this chat to a clan"),
+                new("link", "Bind your Telegram user to a player"),
+                new("status", "Show current clan war status"),
+                new("tagnotplayed", "Show players with remaining battles")
+            });
+
+        using var response = await http.PostAsJsonAsync(
+            $"https://api.telegram.org/bot{token}/setMyCommands",
+            payload,
+            cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogWarning("Telegram setMyCommands failed ({StatusCode}): {Body}", (int)response.StatusCode, body);
+        }
+    }
+
     private static string BuildGetUpdatesUrl(string token, long offset)
     {
         var offsetPart = offset > 0 ? $"&offset={offset}" : string.Empty;
@@ -237,4 +265,11 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
         [JsonPropertyName("url")]
         public string? Url { get; set; }
     }
+
+    private sealed record TelegramSetMyCommandsRequest(
+        [property: JsonPropertyName("commands")] IReadOnlyList<TelegramBotCommandDto> Commands);
+
+    private sealed record TelegramBotCommandDto(
+        [property: JsonPropertyName("command")] string Command,
+        [property: JsonPropertyName("description")] string Description);
 }

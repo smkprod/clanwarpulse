@@ -21,8 +21,18 @@ public sealed class TelegramCommandProcessor
     public async Task HandleMessageAsync(TelegramInboundMessage message, CancellationToken cancellationToken)
     {
         var text = message.Text?.Trim();
-        if (string.IsNullOrWhiteSpace(text) || !text.StartsWith('/'))
+        if (string.IsNullOrWhiteSpace(text))
         {
+            return;
+        }
+
+        var chatId = message.Chat.Id.ToString();
+        using var scope = _scopeFactory.CreateScope();
+        var messenger = scope.ServiceProvider.GetRequiredService<IPlatformMessenger>();
+
+        if (!text.StartsWith('/'))
+        {
+            await SendTextAsync(messenger, chatId, "Use /start or /help to see available commands.", cancellationToken);
             return;
         }
 
@@ -34,18 +44,19 @@ public sealed class TelegramCommandProcessor
 
         var command = parts[0].Split('@', 2)[0].ToLowerInvariant();
         var args = parts.Skip(1).ToArray();
-        var chatId = message.Chat.Id.ToString();
-
-        using var scope = _scopeFactory.CreateScope();
-        var messenger = scope.ServiceProvider.GetRequiredService<IPlatformMessenger>();
 
         switch (command)
         {
             case "/start":
+                await HandleStartAsync(messenger, message, chatId, args, cancellationToken);
+                return;
+
             case "/help":
-                await SendTextAsync(messenger, chatId,
-                    "Команды:\n/setup #CLANTAG\n/link #PLAYERTAG\n/status\n/tagnotplayed\n/help",
-                    cancellationToken);
+                await SendTextAsync(messenger, chatId, BuildHelpText(), cancellationToken);
+                return;
+
+            case "/ping":
+                await SendTextAsync(messenger, chatId, "Bot is online.", cancellationToken);
                 return;
 
             case "/setup":
@@ -66,9 +77,49 @@ public sealed class TelegramCommandProcessor
                 return;
 
             default:
-                await SendTextAsync(messenger, chatId, "Неизвестная команда. Используйте /help", cancellationToken);
+                await SendTextAsync(messenger, chatId, "Unknown command. Use /help.", cancellationToken);
                 return;
         }
+    }
+
+    private static async Task HandleStartAsync(
+        IPlatformMessenger messenger,
+        TelegramInboundMessage message,
+        string chatId,
+        string[] args,
+        CancellationToken cancellationToken)
+    {
+        var lines = new List<string>();
+
+        if (message.From is not null)
+        {
+            lines.Add($"Hello, {BuildUserDisplayName(message.From)}.");
+        }
+
+        lines.Add("ClanWarReminder bot is ready.");
+
+        if (args.Length > 0)
+        {
+            var payload = args[0].Trim();
+
+            if (payload.StartsWith("player_", StringComparison.OrdinalIgnoreCase))
+            {
+                var playerTag = NormalizeTag(payload["player_".Length..]);
+                lines.Add($"Deep link received for player {playerTag}.");
+                lines.Add($"Use /link {playerTag} to link this Telegram account to the player.");
+            }
+            else if (payload.StartsWith("clan_", StringComparison.OrdinalIgnoreCase))
+            {
+                var clanTag = NormalizeTag(payload["clan_".Length..]);
+                lines.Add($"Deep link received for clan {clanTag}.");
+                lines.Add($"Use /setup {clanTag} in the target group to bind the clan.");
+            }
+        }
+
+        lines.Add(string.Empty);
+        lines.Add(BuildHelpText());
+
+        await SendTextAsync(messenger, chatId, string.Join('\n', lines), cancellationToken);
     }
 
     private static async Task HandleSetupAsync(
@@ -80,7 +131,7 @@ public sealed class TelegramCommandProcessor
     {
         if (args.Length == 0)
         {
-            await SendTextAsync(messenger, chatId, "Использование: /setup #CLANTAG", cancellationToken);
+            await SendTextAsync(messenger, chatId, "Usage: /setup #CLANTAG", cancellationToken);
             return;
         }
 
@@ -90,7 +141,7 @@ public sealed class TelegramCommandProcessor
         await SendTextAsync(
             messenger,
             chatId,
-            $"Настройка завершена. Чат {chatId} привязан к клану {group.ClanTag}.",
+            $"Setup completed. Chat {chatId} is linked to clan {group.ClanTag}.",
             cancellationToken);
     }
 
@@ -107,19 +158,19 @@ public sealed class TelegramCommandProcessor
             var top = status.NotPlayed
                 .OrderByDescending(x => x.BattlesRemaining)
                 .Take(10)
-                .Select(x => $"{x.PlayerName} ({x.PlayerTag}) осталось {x.BattlesRemaining}");
+                .Select(x => $"{x.PlayerName} ({x.PlayerTag}) remaining {x.BattlesRemaining}");
 
             var lines = new List<string>
             {
-                $"Клан {status.ClanTag}",
-                $"Война {status.WarKey}",
-                $"Сыграли: {status.Played.Count}",
-                $"Не сыграли: {status.NotPlayed.Count}"
+                $"Clan {status.ClanTag}",
+                $"War {status.WarKey}",
+                $"Played: {status.Played.Count}",
+                $"Not played: {status.NotPlayed.Count}"
             };
 
             if (status.NotPlayed.Count > 0)
             {
-                lines.Add("Кто ещё не сыграл:");
+                lines.Add("Players who still have battles left:");
                 lines.AddRange(top.Select(x => $"- {x}"));
             }
 
@@ -127,7 +178,7 @@ public sealed class TelegramCommandProcessor
         }
         catch (Exception ex)
         {
-            await SendTextAsync(messenger, chatId, $"Не удалось получить статус: {ex.Message}", cancellationToken);
+            await SendTextAsync(messenger, chatId, $"Failed to load status: {ex.Message}", cancellationToken);
         }
     }
 
@@ -141,13 +192,13 @@ public sealed class TelegramCommandProcessor
     {
         if (args.Length == 0)
         {
-            await SendTextAsync(messenger, chatId, "Использование: /link #PLAYERTAG", cancellationToken);
+            await SendTextAsync(messenger, chatId, "Usage: /link #PLAYERTAG", cancellationToken);
             return;
         }
 
         if (message.From is null || message.From.Id <= 0)
         {
-            await SendTextAsync(messenger, chatId, "Не удалось определить Telegram-пользователя для этого сообщения.", cancellationToken);
+            await SendTextAsync(messenger, chatId, "Failed to determine the Telegram user for this message.", cancellationToken);
             return;
         }
 
@@ -162,11 +213,15 @@ public sealed class TelegramCommandProcessor
                 args[0],
                 cancellationToken);
 
-            await SendTextAsync(messenger, chatId, $"Пользователь {BuildUserDisplayName(message.From)} привязан к тегу {link.PlayerTag}.", cancellationToken);
+            await SendTextAsync(
+                messenger,
+                chatId,
+                $"User {BuildUserDisplayName(message.From)} is linked to {link.PlayerTag}.",
+                cancellationToken);
         }
         catch (Exception ex)
         {
-            await SendTextAsync(messenger, chatId, $"Не удалось выполнить привязку: {ex.Message}", cancellationToken);
+            await SendTextAsync(messenger, chatId, $"Failed to link player: {ex.Message}", cancellationToken);
         }
     }
 
@@ -183,7 +238,7 @@ public sealed class TelegramCommandProcessor
 
         if (group is null)
         {
-            await SendTextAsync(messenger, chatId, "Группа не настроена. Сначала используйте /setup #CLANTAG.", cancellationToken);
+            await SendTextAsync(messenger, chatId, "This chat is not configured yet. Use /setup #CLANTAG first.", cancellationToken);
             return;
         }
 
@@ -195,7 +250,7 @@ public sealed class TelegramCommandProcessor
 
         if (notPlayedByTag.Count == 0)
         {
-            await SendTextAsync(messenger, chatId, "Все игроки уже завершили бои войны кланов.", cancellationToken);
+            await SendTextAsync(messenger, chatId, "All clan members have already finished their clan war battles.", cancellationToken);
             return;
         }
 
@@ -214,27 +269,27 @@ public sealed class TelegramCommandProcessor
 
         var lines = new List<string>
         {
-            $"Клан {group.ClanTag}: игроки с оставшимися боями ({notPlayedByTag.Count})"
+            $"Clan {group.ClanTag}: players with remaining battles ({notPlayedByTag.Count})"
         };
 
         if (linkedTargets.Count > 0)
         {
-            lines.Add("Привязанные игроки:");
+            lines.Add("Linked players:");
             foreach (var link in linkedTargets)
             {
                 var normalizedTag = TagNormalizer.NormalizeClanOrPlayerTag(link.PlayerTag);
                 var status = notPlayedByTag[normalizedTag];
                 var displayName = string.IsNullOrWhiteSpace(link.User.DisplayName) ? normalizedTag : link.User.DisplayName;
-                lines.Add($"- {BuildTelegramMention(link.User.PlatformUserId, displayName)} ({normalizedTag}) осталось {status.BattlesRemaining}");
+                lines.Add($"- {BuildTelegramMention(link.User.PlatformUserId, displayName)} ({normalizedTag}) remaining {status.BattlesRemaining}");
             }
         }
 
         if (unlinkedTargets.Count > 0)
         {
-            lines.Add("Пока не привязаны:");
+            lines.Add("Not linked yet:");
             foreach (var member in unlinkedTargets)
             {
-                lines.Add($"- {WebUtility.HtmlEncode(member.PlayerName)} ({WebUtility.HtmlEncode(member.PlayerTag)}) осталось {member.BattlesRemaining}");
+                lines.Add($"- {WebUtility.HtmlEncode(member.PlayerName)} ({WebUtility.HtmlEncode(member.PlayerTag)}) remaining {member.BattlesRemaining}");
             }
         }
 
@@ -279,6 +334,27 @@ public sealed class TelegramCommandProcessor
             .Trim();
 
         return string.IsNullOrWhiteSpace(fullName) ? user.Id.ToString() : fullName;
+    }
+
+    private static string BuildHelpText()
+    {
+        return string.Join('\n', new[]
+        {
+            "Available commands:",
+            "/start - start the bot",
+            "/help - show this help",
+            "/ping - bot health check",
+            "/setup #CLANTAG - bind this chat to a clan",
+            "/link #PLAYERTAG - bind your Telegram user to a player",
+            "/status - current clan war status",
+            "/tagnotplayed - mention players who still have battles left"
+        });
+    }
+
+    private static string NormalizeTag(string value)
+    {
+        var normalized = value.Trim().TrimStart('#').ToUpperInvariant();
+        return string.IsNullOrWhiteSpace(normalized) ? value : $"#{normalized}";
     }
 }
 
