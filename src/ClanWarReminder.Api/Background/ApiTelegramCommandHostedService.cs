@@ -1,6 +1,4 @@
 using System.Net.Http.Json;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json.Serialization;
 using ClanWarReminder.Api.Telegram;
 using ClanWarReminder.Infrastructure.Options;
@@ -38,21 +36,6 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
         }
 
         var http = _httpClientFactory.CreateClient();
-
-        if (TryBuildWebhookUrl(botToken!, out var webhookUrl))
-        {
-            try
-            {
-                await EnsureBotCommandsRegisteredAsync(http, botToken!, stoppingToken);
-                await EnsureWebhookReadyAsync(http, botToken!, webhookUrl, stoppingToken);
-                _logger.LogInformation("Telegram webhook mode enabled: {WebhookUrl}", webhookUrl);
-                return;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Telegram webhook setup failed. Falling back to polling mode.");
-            }
-        }
 
         try
         {
@@ -102,45 +85,6 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
         }
     }
 
-    private bool TryBuildWebhookUrl(string token, out string webhookUrl)
-    {
-        var configured = _telegramOptions.WebhookUrl?.Trim();
-        if (string.IsNullOrWhiteSpace(configured))
-        {
-            webhookUrl = string.Empty;
-            return false;
-        }
-
-        if (!configured.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
-            !configured.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-        {
-            configured = $"https://{configured.TrimStart('/')}";
-        }
-
-        var secret = string.IsNullOrWhiteSpace(_telegramOptions.WebhookSecret)
-            ? Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)))[..24].ToLowerInvariant()
-            : _telegramOptions.WebhookSecret.Trim();
-
-        webhookUrl = configured.Contains("/telegram/webhook/", StringComparison.OrdinalIgnoreCase)
-            ? configured
-            : $"{configured.TrimEnd('/')}/telegram/webhook/{secret}";
-
-        return true;
-    }
-
-    private async Task EnsureWebhookReadyAsync(HttpClient http, string token, string webhookUrl, CancellationToken cancellationToken)
-    {
-        var payload = new
-        {
-            url = webhookUrl,
-            allowed_updates = new[] { "message" },
-            drop_pending_updates = false
-        };
-
-        using var response = await http.PostAsJsonAsync($"https://api.telegram.org/bot{token}/setWebhook", payload, cancellationToken);
-        response.EnsureSuccessStatusCode();
-    }
-
     private async Task EnsurePollingReadyAsync(HttpClient http, string token, CancellationToken cancellationToken)
     {
         var webhookInfo = await http.GetFromJsonAsync<TelegramWebhookInfoResponse>(
@@ -149,7 +93,7 @@ public sealed class ApiTelegramCommandHostedService : BackgroundService
 
         if (webhookInfo?.Ok == true && !string.IsNullOrWhiteSpace(webhookInfo.Result?.Url))
         {
-            _logger.LogWarning("Telegram webhook {WebhookUrl} is configured. Clearing it so long polling can work.", webhookInfo.Result.Url);
+            _logger.LogInformation("Clearing Telegram webhook {WebhookUrl}. Bot is configured to use polling only.", webhookInfo.Result.Url);
             await http.GetAsync($"https://api.telegram.org/bot{token}/deleteWebhook?drop_pending_updates=false", cancellationToken);
         }
 
