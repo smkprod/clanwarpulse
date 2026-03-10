@@ -318,7 +318,7 @@ public class ClashRoyaleClient : IClashRoyaleClient
 
         var avgScore = recentWars.Count > 0 ? recentWars.Average(x => x.Score) : 0;
         var bestScore = recentWars.Count > 0 ? recentWars.Max(x => x.Score) : 0;
-        var currentScore = clan.TotalClanScore > 0 ? clan.TotalClanScore : clan.Fame + clan.RepairPoints;
+        var currentScore = ResolveClanScore(clan);
 
         return new ClanWarClanDetails(
             normalizedClanTag,
@@ -501,21 +501,21 @@ public class ClashRoyaleClient : IClashRoyaleClient
 
         foreach (var item in log.Items)
         {
-            var results = item.Standings
-                .Select(x =>
-                {
-                    var score = x.Clan.TotalClanScore > 0
-                        ? x.Clan.TotalClanScore
-                        : x.Clan.Fame + x.Clan.RepairPoints;
-
-                    return new ClanWarHistoryClanResult(
+            var results = item.Standings.Count > 0
+                ? item.Standings
+                    .Select(x => new ClanWarHistoryClanResult(
                         NormalizeTag(x.Clan.Tag),
                         x.Clan.Name,
-                        score,
-                        Math.Max(x.Rank, 1));
-                })
-                .OrderBy(x => x.Rank)
-                .ToList();
+                        ResolveClanScore(x.Clan),
+                        Math.Max(x.Rank, 1)))
+                    .OrderBy(x => x.Rank)
+                    .ToList()
+                : BuildHistoryResultsFromFallbackPayload(item);
+
+            if (results.Count == 0)
+            {
+                continue;
+            }
 
             var key = BuildWarKey(item.SeasonId, item.SectionIndex, entries.Count + 1);
             entries.Add(new ClanWarHistoryEntry(key, results));
@@ -738,9 +738,7 @@ public class ClashRoyaleClient : IClashRoyaleClient
 
     private static ClanWarOpponentStatus MapOpponent(RaceClanDto clan)
     {
-        var totalScore = clan.TotalClanScore > 0
-            ? clan.TotalClanScore
-            : clan.Fame + clan.RepairPoints;
+        var totalScore = ResolveClanScore(clan);
 
         return new ClanWarOpponentStatus(
             NormalizeTag(clan.Tag),
@@ -754,9 +752,7 @@ public class ClashRoyaleClient : IClashRoyaleClient
 
     private static ClanCurrentRaceClan MapCurrentRaceClan(RaceClanDto clan)
     {
-        var totalScore = clan.TotalClanScore > 0
-            ? clan.TotalClanScore
-            : clan.Fame + clan.RepairPoints;
+        var totalScore = ResolveClanScore(clan);
 
         return new ClanCurrentRaceClan(
             NormalizeTag(clan.Tag),
@@ -766,6 +762,72 @@ public class ClashRoyaleClient : IClashRoyaleClient
             clan.PeriodPoints,
             totalScore,
             clan.Participants.Count);
+    }
+
+    private static int ResolveClanScore(RaceClanDto clan)
+    {
+        return clan.TotalClanScore > 0
+            ? clan.TotalClanScore
+            : clan.ClanScore > 0
+                ? clan.ClanScore
+                : clan.Fame + clan.RepairPoints;
+    }
+
+    private static int ResolveClanScore(RiverRaceClanLogDto clan)
+    {
+        return clan.TotalClanScore > 0
+            ? clan.TotalClanScore
+            : clan.ClanScore > 0
+                ? clan.ClanScore
+                : clan.Fame + clan.RepairPoints;
+    }
+
+    private static List<ClanWarHistoryClanResult> BuildHistoryResultsFromFallbackPayload(RiverRaceLogItemDto item)
+    {
+        if (item.Clans.Count > 0)
+        {
+            return item.Clans
+                .Select((clan, index) => new ClanWarHistoryClanResult(
+                    NormalizeTag(clan.Tag),
+                    clan.Name,
+                    ResolveClanScore(clan),
+                    index + 1))
+                .OrderByDescending(x => x.Score)
+                .ThenBy(x => x.ClanName)
+                .Select((x, index) => x with { Rank = index + 1 })
+                .ToList();
+        }
+
+        var periodLog = item.PeriodLog.Count > 0 ? item.PeriodLog : item.PeriodLogs;
+        if (periodLog.Count == 0)
+        {
+            return new List<ClanWarHistoryClanResult>();
+        }
+
+        return periodLog
+            .Where(x => x.Clan is not null && !string.IsNullOrWhiteSpace(x.Clan.Tag))
+            .GroupBy(x => NormalizeTag(x.Clan!.Tag), StringComparer.OrdinalIgnoreCase)
+            .Select(group =>
+            {
+                var latest = group
+                    .OrderByDescending(x => x.ProgressEndOfDay)
+                    .ThenByDescending(x => x.PointsEarned)
+                    .First();
+
+                var score = Math.Max(
+                    Math.Max(latest.ProgressEndOfDay, latest.ProgressEarned),
+                    latest.PointsEarned);
+
+                return new ClanWarHistoryClanResult(
+                    NormalizeTag(latest.Clan!.Tag),
+                    latest.Clan.Tag,
+                    score,
+                    latest.EndOfDayRank > 0 ? latest.EndOfDayRank : int.MaxValue);
+            })
+            .OrderBy(x => x.Rank)
+            .ThenByDescending(x => x.Score)
+            .Select((x, index) => x with { Rank = x.Rank == int.MaxValue ? index + 1 : x.Rank })
+            .ToList();
     }
 
     private sealed class PlayerResponse
@@ -820,6 +882,9 @@ public class ClashRoyaleClient : IClashRoyaleClient
 
         [JsonPropertyName("totalClanScore")]
         public int TotalClanScore { get; set; }
+
+        [JsonPropertyName("clanScore")]
+        public int ClanScore { get; set; }
 
         [JsonPropertyName("periodPoints")]
         public int PeriodPoints { get; set; }
@@ -892,6 +957,15 @@ public class ClashRoyaleClient : IClashRoyaleClient
 
         [JsonPropertyName("standings")]
         public List<RiverRaceStandingDto> Standings { get; set; } = new();
+
+        [JsonPropertyName("clans")]
+        public List<RiverRaceClanLogDto> Clans { get; set; } = new();
+
+        [JsonPropertyName("periodLog")]
+        public List<PeriodLogEntryDto> PeriodLog { get; set; } = new();
+
+        [JsonPropertyName("periodLogs")]
+        public List<PeriodLogEntryDto> PeriodLogs { get; set; } = new();
     }
 
     private sealed class RiverRaceStandingDto
@@ -920,8 +994,44 @@ public class ClashRoyaleClient : IClashRoyaleClient
         [JsonPropertyName("totalClanScore")]
         public int TotalClanScore { get; set; }
 
+        [JsonPropertyName("clanScore")]
+        public int ClanScore { get; set; }
+
         [JsonPropertyName("participants")]
         public List<RiverRaceLogParticipantDto> Participants { get; set; } = new();
+    }
+
+    private sealed class PeriodLogEntryDto
+    {
+        [JsonPropertyName("clan")]
+        public PeriodLogEntryClanDto? Clan { get; set; }
+
+        [JsonPropertyName("pointsEarned")]
+        public int PointsEarned { get; set; }
+
+        [JsonPropertyName("progressStartOfDay")]
+        public int ProgressStartOfDay { get; set; }
+
+        [JsonPropertyName("progressEndOfDay")]
+        public int ProgressEndOfDay { get; set; }
+
+        [JsonPropertyName("endOfDayRank")]
+        public int EndOfDayRank { get; set; }
+
+        [JsonPropertyName("progressEarned")]
+        public int ProgressEarned { get; set; }
+
+        [JsonPropertyName("numOfDefensesRemaining")]
+        public int NumOfDefensesRemaining { get; set; }
+
+        [JsonPropertyName("progressEarnedFromDefenses")]
+        public int ProgressEarnedFromDefenses { get; set; }
+    }
+
+    private sealed class PeriodLogEntryClanDto
+    {
+        [JsonPropertyName("tag")]
+        public string Tag { get; set; } = string.Empty;
     }
 
     private sealed class RiverRaceLogParticipantDto
