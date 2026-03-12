@@ -227,10 +227,12 @@ function ActivityTab({ dashboard, authorizedTags, onOpenPlayerProfile, busy }) {
 }
 
 function OpponentsTab({ dashboard, identity }) {
-  const raceClans = [...(dashboard.currentRaceClans ?? [])].sort((a, b) => b.totalScore - a.totalScore);
-  const opponents = dashboard.opponents?.length
-    ? dashboard.opponents
-    : raceClans.filter((item) => normalizeTag(item.clanTag) !== normalizeTag(dashboard.clanTag));
+  const raceClans = [...(dashboard.currentRaceClans ?? [])]
+    .sort((a, b) => (b.periodPoints ?? 0) - (a.periodPoints ?? 0));
+  const opponents = (dashboard.opponents?.length
+    ? [...dashboard.opponents]
+    : raceClans.filter((item) => normalizeTag(item.clanTag) !== normalizeTag(dashboard.clanTag)))
+    .sort((a, b) => (b.periodPoints ?? 0) - (a.periodPoints ?? 0));
   const maxScore = raceClans.length ? Math.max(...raceClans.map((item) => item.totalScore), 1) : 1;
 
   if (!raceClans.length) {

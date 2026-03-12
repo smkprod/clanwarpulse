@@ -148,7 +148,6 @@ public class ClashRoyaleClient : IClashRoyaleClient
                 x.PeriodPoints,
                 x.TotalScore,
                 x.ParticipantsCount))
-            .OrderByDescending(x => x.TotalScore)
             .ToList();
     }
 
@@ -161,7 +160,6 @@ public class ClashRoyaleClient : IClashRoyaleClient
 
         return clans
             .Select(MapCurrentRaceClan)
-            .OrderByDescending(x => x.TotalScore)
             .ToList();
     }
 
@@ -462,6 +460,17 @@ public class ClashRoyaleClient : IClashRoyaleClient
             var currentWeekKey = BuildWarKey(currentRace);
             var startedAt = StartOfWarWeek(DateTimeOffset.UtcNow);
             var existingIndex = recentWeeks.FindIndex(x => string.Equals(x.WarKey, currentWeekKey, StringComparison.OrdinalIgnoreCase));
+            var existingWeek = existingIndex >= 0 ? recentWeeks[existingIndex] : null;
+            var mergedBattlesPlayed = Math.Max(currentWeekBattles, existingWeek?.BattlesPlayed ?? 0);
+            var mergedContribution = Math.Max(currentWeekContribution, existingWeek?.TotalContribution ?? 0);
+            var mergedAverageContribution = mergedBattlesPlayed > 0
+                ? Math.Round(mergedContribution / (double)mergedBattlesPlayed, 1)
+                : existingWeek?.AverageContributionPerBattle ?? 0;
+            var mergedWarWins = Math.Max(0, existingWeek?.WarWins ?? 0);
+            var mergedWarLosses = Math.Max(0, existingWeek?.WarLosses ?? 0);
+            double? mergedWarWinRate = mergedWarWins + mergedWarLosses > 0
+                ? Math.Round(mergedWarWins * 100d / (mergedWarWins + mergedWarLosses), 1)
+                : existingWeek?.WarWinRate;
             var currentWeek = new PlayerWarWeekSummary(
                 currentWeekKey,
                 startedAt,
@@ -469,15 +478,15 @@ public class ClashRoyaleClient : IClashRoyaleClient
                 identity.ClanTag,
                 identity.ClanName,
                 false,
-                currentWeekBattles,
+                mergedBattlesPlayed,
                 16,
-                Math.Round((currentWeekBattles / 16d) * 100d, 1),
-                currentWeekBattles >= 16,
-                currentWeekContribution,
-                currentWeekBattles > 0 ? Math.Round(currentWeekContribution / (double)currentWeekBattles, 1) : 0,
-                existingIndex >= 0 ? recentWeeks[existingIndex].WarWins : 0,
-                existingIndex >= 0 ? recentWeeks[existingIndex].WarLosses : 0,
-                existingIndex >= 0 ? recentWeeks[existingIndex].WarWinRate : null);
+                Math.Round((mergedBattlesPlayed / 16d) * 100d, 1),
+                mergedBattlesPlayed >= 16,
+                mergedContribution,
+                mergedAverageContribution,
+                mergedWarWins,
+                mergedWarLosses,
+                mergedWarWinRate);
 
             if (existingIndex >= 0)
             {
@@ -636,6 +645,7 @@ public class ClashRoyaleClient : IClashRoyaleClient
     {
         var type = entry.Type ?? string.Empty;
         return type.Contains("river", StringComparison.OrdinalIgnoreCase) ||
+               type.Contains("colosseum", StringComparison.OrdinalIgnoreCase) ||
                type.Contains("boat", StringComparison.OrdinalIgnoreCase) ||
                type.Contains("war", StringComparison.OrdinalIgnoreCase);
     }
@@ -766,20 +776,22 @@ public class ClashRoyaleClient : IClashRoyaleClient
 
     private static int ResolveClanScore(RaceClanDto clan)
     {
-        return clan.TotalClanScore > 0
-            ? clan.TotalClanScore
-            : clan.ClanScore > 0
-                ? clan.ClanScore
-                : clan.Fame + clan.RepairPoints;
+        return clan.Fame + clan.RepairPoints > 0
+            ? clan.Fame + clan.RepairPoints
+            : clan.TotalClanScore > 0
+                ? clan.TotalClanScore
+                : clan.ClanScore > 0
+                    ? clan.ClanScore
+                    : clan.PeriodPoints;
     }
 
     private static int ResolveClanScore(RiverRaceClanLogDto clan)
     {
-        return clan.TotalClanScore > 0
-            ? clan.TotalClanScore
-            : clan.ClanScore > 0
-                ? clan.ClanScore
-                : clan.Fame + clan.RepairPoints;
+        return clan.Fame + clan.RepairPoints > 0
+            ? clan.Fame + clan.RepairPoints
+            : clan.TotalClanScore > 0
+                ? clan.TotalClanScore
+                : clan.ClanScore;
     }
 
     private static List<ClanWarHistoryClanResult> BuildHistoryResultsFromFallbackPayload(RiverRaceLogItemDto item)

@@ -127,7 +127,7 @@ public class PlayerWarProfileService
         {
             var mergeKey = BuildMergeKey(week.WarKey, week.ClanTag);
             merged.TryGetValue(mergeKey, out var fallbackWeek);
-            merged[mergeKey] = new PlayerWarWeekSummary(
+            var storedSummary = new PlayerWarWeekSummary(
                 week.WarKey,
                 week.StartedAtUtc,
                 week.EndedAtUtc,
@@ -143,6 +143,9 @@ public class PlayerWarProfileService
                 fallbackWeek?.WarWins ?? 0,
                 fallbackWeek?.WarLosses ?? 0,
                 fallbackWeek?.WarWinRate);
+            merged[mergeKey] = fallbackWeek is null
+                ? storedSummary
+                : MergeWeekSummaries(storedSummary, fallbackWeek);
         }
 
         return merged.Values
@@ -234,6 +237,40 @@ public class PlayerWarProfileService
 
     private static string BuildMergeKey(string warKey, string clanTag)
         => $"{warKey}:{TagNormalizer.NormalizeClanOrPlayerTag(clanTag)}";
+
+    private static PlayerWarWeekSummary MergeWeekSummaries(
+        PlayerWarWeekSummary primary,
+        PlayerWarWeekSummary secondary)
+    {
+        var battlesPlayed = Math.Max(primary.BattlesPlayed, secondary.BattlesPlayed);
+        var maxBattles = Math.Max(Math.Max(primary.MaxBattles, secondary.MaxBattles), 16);
+        var totalContribution = Math.Max(primary.TotalContribution ?? 0, secondary.TotalContribution ?? 0);
+        var averageContributionPerBattle = battlesPlayed > 0
+            ? Math.Round(totalContribution / (double)battlesPlayed, 1)
+            : primary.AverageContributionPerBattle ?? secondary.AverageContributionPerBattle;
+        var warWins = Math.Max(primary.WarWins, secondary.WarWins);
+        var warLosses = Math.Max(primary.WarLosses, secondary.WarLosses);
+        double? warWinRate = warWins + warLosses > 0
+            ? Math.Round(warWins * 100d / (warWins + warLosses), 1)
+            : primary.WarWinRate ?? secondary.WarWinRate;
+
+        return new PlayerWarWeekSummary(
+            primary.WarKey,
+            primary.StartedAtUtc >= secondary.StartedAtUtc ? primary.StartedAtUtc : secondary.StartedAtUtc,
+            primary.EndedAtUtc >= secondary.EndedAtUtc ? primary.EndedAtUtc : secondary.EndedAtUtc,
+            primary.ClanTag,
+            primary.ClanName,
+            primary.IsColosseumWeighted || secondary.IsColosseumWeighted,
+            battlesPlayed,
+            maxBattles,
+            Math.Round((battlesPlayed / (double)maxBattles) * 100d, 1),
+            battlesPlayed >= maxBattles,
+            totalContribution,
+            averageContributionPerBattle,
+            warWins,
+            warLosses,
+            warWinRate);
+    }
 
     private static double BuildPredictionWeight(int index)
     {
