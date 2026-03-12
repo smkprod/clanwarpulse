@@ -415,14 +415,22 @@ public class ClashRoyaleClient : IClashRoyaleClient
 
                 var startedAt = ResolveRaceLogStartedAtUtc(item);
                 var endedAt = startedAt.AddDays(4);
-                var maxBattles = Math.Max(participant.NumberOfBattles, participant.BattlesPlayed);
+
+                var battlesPlayed = participant.BattlesPlayed;
+                if (battlesPlayed == 0 && participant.CollectionDayBattlesPlayed > 0)
+                {
+                    battlesPlayed = participant.CollectionDayBattlesPlayed;
+                }
+
+                var maxBattles = Math.Max(participant.NumberOfBattles, battlesPlayed);
                 maxBattles = maxBattles > 0 ? maxBattles : 16;
+
                 var totalContribution = participant.CardsEarned;
-                double? averageContributionPerBattle = participant.BattlesPlayed > 0
-                    ? Math.Round(totalContribution / (double)participant.BattlesPlayed, 1)
+                double? averageContributionPerBattle = battlesPlayed > 0
+                    ? Math.Round(totalContribution / (double)battlesPlayed, 1)
                     : null;
-                double? warWinRate = participant.BattlesPlayed > 0
-                    ? Math.Round(participant.Wins * 100d / participant.BattlesPlayed, 1)
+                double? warWinRate = battlesPlayed > 0
+                    ? Math.Round(participant.Wins * 100d / battlesPlayed, 1)
                     : null;
 
                 var clanScore = ResolveClanScore(ownStanding.Clan);
@@ -434,14 +442,14 @@ public class ClashRoyaleClient : IClashRoyaleClient
                     NormalizeTag(ownStanding.Clan.Tag),
                     ownStanding.Clan.Name,
                     false,
-                    participant.BattlesPlayed,
+                    battlesPlayed,
                     maxBattles,
-                    Math.Round((participant.BattlesPlayed / (double)maxBattles) * 100d, 1),
-                    participant.BattlesPlayed >= maxBattles,
+                    Math.Round((battlesPlayed / (double)maxBattles) * 100d, 1),
+                    battlesPlayed >= maxBattles,
                     totalContribution,
                     averageContributionPerBattle,
                     participant.Wins,
-                    Math.Max(0, participant.BattlesPlayed - participant.Wins),
+                    Math.Max(0, battlesPlayed - participant.Wins),
                     warWinRate,
                     clanScore);
             })
