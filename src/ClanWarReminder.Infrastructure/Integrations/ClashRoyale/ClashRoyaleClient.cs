@@ -395,7 +395,8 @@ public class ClashRoyaleClient : IClashRoyaleClient
                     avgContributionPerBattle,
                     warWins,
                     warLosses,
-                    warWinRate);
+                    warWinRate,
+                    null);
             })
             .OrderByDescending(x => x.StartedAtUtc)
             .ToList();
@@ -424,6 +425,8 @@ public class ClashRoyaleClient : IClashRoyaleClient
                     ? Math.Round(participant.Wins * 100d / participant.BattlesPlayed, 1)
                     : null;
 
+                var clanScore = ResolveClanScore(ownStanding.Clan);
+
                 return new PlayerWarWeekSummary(
                     BuildWarKey(item.SeasonId, item.SectionIndex, 0),
                     startedAt,
@@ -439,7 +442,8 @@ public class ClashRoyaleClient : IClashRoyaleClient
                     averageContributionPerBattle,
                     participant.Wins,
                     Math.Max(0, participant.BattlesPlayed - participant.Wins),
-                    warWinRate);
+                    warWinRate,
+                    clanScore);
             })
             .Where(x => x is not null)
             .Select(x => x!)
@@ -471,6 +475,7 @@ public class ClashRoyaleClient : IClashRoyaleClient
             double? mergedWarWinRate = mergedWarWins + mergedWarLosses > 0
                 ? Math.Round(mergedWarWins * 100d / (mergedWarWins + mergedWarLosses), 1)
                 : existingWeek?.WarWinRate;
+            var mergedClanScore = existingWeek?.ClanScore;
             var currentWeek = new PlayerWarWeekSummary(
                 currentWeekKey,
                 startedAt,
@@ -486,7 +491,8 @@ public class ClashRoyaleClient : IClashRoyaleClient
                 mergedAverageContribution,
                 mergedWarWins,
                 mergedWarLosses,
-                mergedWarWinRate);
+                mergedWarWinRate,
+                mergedClanScore);
 
             if (existingIndex >= 0)
             {

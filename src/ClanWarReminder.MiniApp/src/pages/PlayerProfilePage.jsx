@@ -123,7 +123,7 @@ export function PlayerProfilePage({ profile, profileWindowWeeks, onWindowChange,
           <Typography sx={{ fontWeight: 700, mb: 0.8 }}>Почему такой прогноз</Typography>
           <Typography variant="body2" color="text.secondary">
             Профиль считается по последним {profile.profileWindowWeeks} КВ. Сейчас доступно {profile.availableHistoryWeeks} КВ истории, качество оценки: {profile.dataQualityLabel.toLowerCase()}.
-            Все недели КВ считаются одинаково, без отдельного приоритета для колизея. Winrate по клановым колодам берется из river race log и battle log Clash Royale API.
+            Все недели КВ считаются одинаково, без отдельного приоритета для колизея. Winrate по клановым колодам и очки клана по речным гонкам берутся из river race log и battle log Clash Royale API.
           </Typography>
         </Paper>
 
@@ -167,7 +167,7 @@ export function PlayerProfilePage({ profile, profileWindowWeeks, onWindowChange,
                     {week.warKey} • {week.clanName}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    {week.battlesPlayed}/{week.maxBattles} • {fmt(week.participationRate)}%{week.totalContribution != null ? ` • ${week.totalContribution} очков` : ""}{week.warWinRate != null ? ` • WR ${fmt(week.warWinRate)}%` : ""}
+                    {week.battlesPlayed}/{week.maxBattles} • {fmt(week.participationRate)}%{week.totalContribution != null ? ` • ${week.totalContribution} очков` : ""}{week.clanScore != null ? ` • клан ${week.clanScore} кубков` : ""}{week.warWinRate != null ? ` • WR ${fmt(week.warWinRate)}%` : ""}
                   </Typography>
                 </Stack>
                 <LinearProgress variant="determinate" value={Math.min(100, week.participationRate)} sx={progressSx} />
@@ -194,7 +194,7 @@ function TrendChart({ weeks }) {
           <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={0.3}>
             <Typography variant="body2">{week.warKey}</Typography>
             <Typography variant="caption" color="text.secondary">
-              {week.totalContribution != null ? `${week.totalContribution} очков` : "очки недоступны"} • {week.battlesPlayed}/16{week.warWinRate != null ? ` • WR ${fmt(week.warWinRate)}%` : ""}
+              {week.totalContribution != null ? `${week.totalContribution} очков` : "очки недоступны"}{week.clanScore != null ? ` • клан ${week.clanScore} кубков` : ""} • {week.battlesPlayed}/16{week.warWinRate != null ? ` • WR ${fmt(week.warWinRate)}%` : ""}
             </Typography>
           </Stack>
           <Stack direction="row" spacing={0.7} sx={{ mt: 0.45 }}>

@@ -45,6 +45,7 @@ public class PlayerWarProfileService
                 0,
                 0,
                 0,
+                null,
                 null));
         }
 
@@ -142,7 +143,8 @@ public class PlayerWarProfileService
                 week.AverageContributionPerBattle > 0 ? week.AverageContributionPerBattle : null,
                 fallbackWeek?.WarWins ?? 0,
                 fallbackWeek?.WarLosses ?? 0,
-                fallbackWeek?.WarWinRate);
+                fallbackWeek?.WarWinRate,
+                fallbackWeek?.ClanScore);
             merged[mergeKey] = fallbackWeek is null
                 ? storedSummary
                 : MergeWeekSummaries(storedSummary, fallbackWeek);
@@ -253,6 +255,7 @@ public class PlayerWarProfileService
         double? warWinRate = warWins + warLosses > 0
             ? Math.Round(warWins * 100d / (warWins + warLosses), 1)
             : primary.WarWinRate ?? secondary.WarWinRate;
+        int? clanScore = Math.Max(primary.ClanScore ?? 0, secondary.ClanScore ?? 0);
 
         return new PlayerWarWeekSummary(
             primary.WarKey,
@@ -269,7 +272,8 @@ public class PlayerWarProfileService
             averageContributionPerBattle,
             warWins,
             warLosses,
-            warWinRate);
+            warWinRate,
+            clanScore);
     }
 
     private static double BuildPredictionWeight(int index)

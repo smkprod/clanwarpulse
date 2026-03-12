@@ -113,7 +113,8 @@ public sealed record PlayerWarWeekSummary(
     double? AverageContributionPerBattle,
     int WarWins,
     int WarLosses,
-    double? WarWinRate);
+    double? WarWinRate,
+    int? ClanScore);
 
 public sealed record PlayerRecentClanEntry(
     string ClanTag,
