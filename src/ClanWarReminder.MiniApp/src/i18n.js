@@ -47,7 +47,7 @@ export const translations = {
       warStatus: "Статус войны",
       currentWar: "Текущая КВ",
       memberStatus: "Статус игрока",
-      memberStatusValue: (played, left) => `${played}/4 сыграно · осталось ${left}`,
+      memberStatusValue: (played, left, total = 16) => `${played}/${total} сыграно · осталось ${left}`,
       actions: { refresh: "Обновить", notify: "Напомнить", openBot: "Открыть бота" },
       quickStats: { active: "Сыграли", inactive: "Не сыграли", members: "Участников", linked: "Привязано в Telegram" }
     },
@@ -176,7 +176,7 @@ export const translations = {
       warStatus: "War status",
       currentWar: "Current war",
       memberStatus: "Player status",
-      memberStatusValue: (played, left) => `${played}/4 played · ${left} left`,
+      memberStatusValue: (played, left, total = 16) => `${played}/${total} played · ${left} left`,
       actions: { refresh: "Refresh", notify: "Notify", openBot: "Open bot" },
       quickStats: { active: "Played", inactive: "Not played", members: "Members", linked: "Telegram linked" }
     },

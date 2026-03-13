@@ -97,6 +97,7 @@ export function DashboardPage({
           currentMember={currentMember}
           averageDeckPoints={averageDeckPoints}
           linkedCount={linkedCount}
+          playerProfile={playerProfile}
         />
       ) : null}
 
@@ -134,8 +135,11 @@ export function DashboardPage({
   );
 }
 
-function HomeTab({ copy, identity, dashboard, clanDetails, currentMember, averageDeckPoints, linkedCount }) {
+function HomeTab({ copy, identity, dashboard, clanDetails, currentMember, averageDeckPoints, linkedCount, playerProfile }) {
   const totalMembers = dashboard.allMembers?.length ?? clanDetails?.participantsCount ?? 0;
+  const playedBattles = playerProfile?.currentWeekBattlesPlayed ?? currentMember?.battlesPlayed ?? 0;
+  const totalBattles = playerProfile?.currentWeekMaxBattles ?? 16;
+  const remainingBattles = playerProfile?.currentWeekBattlesRemaining ?? Math.max(0, totalBattles - playedBattles);
   const cards = [
     { label: copy.home.cards.clanName, value: identity.clanName, helper: copy.home.cardsHelp.clanName },
     { label: copy.home.cards.playerName, value: identity.playerName, helper: copy.home.cardsHelp.playerName },
@@ -153,8 +157,9 @@ function HomeTab({ copy, identity, dashboard, clanDetails, currentMember, averag
           <Chip label={`${copy.home.currentWar}: ${dashboard.warKey}`} variant="outlined" />
           <Chip
             label={`${copy.home.memberStatus}: ${copy.home.memberStatusValue(
-              currentMember?.battlesPlayed ?? 0,
-              currentMember?.battlesRemaining ?? 0
+              playedBattles,
+              remainingBattles,
+              totalBattles
             )}`}
             variant="outlined"
           />
@@ -450,7 +455,7 @@ function GridCards({ children }) {
     <Box
       sx={{
         display: "grid",
-        gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", xl: "repeat(4, minmax(0, 1fr))" },
+        gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" },
         gap: 1.1
       }}
     >
