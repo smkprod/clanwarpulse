@@ -74,4 +74,26 @@ public class PlayerLinkService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         return link;
     }
+
+    public async Task<int> UnlinkAsync(
+        PlatformType platform,
+        string platformUserId,
+        CancellationToken cancellationToken)
+    {
+        var user = await _users.GetByPlatformUserAsync(platform, platformUserId, cancellationToken);
+        if (user is null)
+        {
+            return 0;
+        }
+
+        var links = await _links.GetByUserAsync(user.Id, cancellationToken);
+        if (links.Count == 0)
+        {
+            return 0;
+        }
+
+        await _links.DeleteRangeAsync(links, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return links.Count;
+    }
 }

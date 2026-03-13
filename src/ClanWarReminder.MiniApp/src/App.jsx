@@ -1,58 +1,52 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  Alert,
-  Box,
-  Button,
-  CircularProgress,
-  Container,
-  CssBaseline,
-  Paper,
-  Stack,
-  ThemeProvider,
-  Typography
-} from "@mui/material";
+import { Alert, Box, CircularProgress, CssBaseline, Stack, ThemeProvider, Typography } from "@mui/material";
 import { apiGet, apiPost } from "./api/client";
 import { DashboardPage } from "./pages/DashboardPage";
 import { PlayerProfilePage } from "./pages/PlayerProfilePage";
 import { SignInPage } from "./pages/SignInPage";
+import { getCopy } from "./i18n";
 import { getTelegramChatId, getTelegramInitData, initTelegramWebApp, notify, openBotLink } from "./lib/telegram";
-import { appTheme } from "./theme";
+import { buildAppTheme } from "./theme";
 
 initTelegramWebApp();
 
-const SESSION_STORAGE_KEY = "clanwarreminder.playerTag";
-const MOBILE_TABS = ["КВ", "Враги", "Прогноз", "История", "Кланы", "TG"];
+const STORAGE_KEYS = {
+  playerTag: "clanwarreminder.playerTag",
+  themeMode: "clanwarreminder.themeMode",
+  language: "clanwarreminder.language"
+};
 
 export default function App() {
   const [playerTag, setPlayerTag] = useState("");
+  const [themeMode, setThemeMode] = useState(loadStoredValue(STORAGE_KEYS.themeMode, "dark"));
+  const [language, setLanguage] = useState(loadStoredValue(STORAGE_KEYS.language, "ru"));
   const [busy, setBusy] = useState(false);
-  const [feedback, setFeedback] = useState({
-    text: "Введите тег игрока или дождитесь автоматического входа через Telegram.",
-    severity: "info"
-  });
+  const [feedback, setFeedback] = useState(null);
   const [session, setSession] = useState(null);
-  const [tab, setTab] = useState(0);
-  const [selectedClanTag, setSelectedClanTag] = useState("");
+  const [currentView, setCurrentView] = useState("dashboard");
+  const [activeTab, setActiveTab] = useState("home");
   const [clanDetails, setClanDetails] = useState(null);
   const [telegramSync, setTelegramSync] = useState(null);
   const [playerProfile, setPlayerProfile] = useState(null);
-  const [currentView, setCurrentView] = useState("dashboard");
   const [profileWindowWeeks, setProfileWindowWeeks] = useState(5);
 
-  const titleLine = useMemo(() => {
-    if (!session) {
-      return "Первый вход: Telegram + тег Clash Royale";
-    }
-
-    return `${session.identity.playerName} | ${session.identity.clanName}`;
-  }, [session]);
+  const theme = useMemo(() => buildAppTheme(themeMode), [themeMode]);
+  const copy = getCopy(language);
 
   useEffect(() => {
-    const savedTag = window.localStorage.getItem(SESSION_STORAGE_KEY);
+    const savedTag = window.localStorage.getItem(STORAGE_KEYS.playerTag);
     if (savedTag) {
       setPlayerTag(savedTag);
     }
   }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(STORAGE_KEYS.themeMode, themeMode);
+  }, [themeMode]);
+
+  useEffect(() => {
+    window.localStorage.setItem(STORAGE_KEYS.language, language);
+  }, [language]);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,22 +71,10 @@ export default function App() {
           return;
         }
 
-        setSession(data.session);
-        setPlayerTag(data.session.identity.playerTag);
-        window.localStorage.setItem(SESSION_STORAGE_KEY, data.session.identity.playerTag);
-        await loadTelegramSync(data.session.identity.playerTag);
-        await loadPlayerProfile(data.session.identity.playerTag);
-        setCurrentView("dashboard");
-        setFeedback({
-          text: `Автоматически восстановлен вход для ${data.session.identity.playerName}.`,
-          severity: "success"
-        });
+        await applySession(data.session, copy.restoreSuccess(data.session.identity.playerName));
       } catch (error) {
         if (!cancelled) {
-          setFeedback({
-            text: error.message || "Не удалось восстановить вход через Telegram.",
-            severity: "warning"
-          });
+          setFeedback({ text: error.message || copy.unexpectedError, severity: "warning" });
         }
       } finally {
         if (!cancelled) {
@@ -102,10 +84,11 @@ export default function App() {
     }
 
     restoreSession();
+
     return () => {
       cancelled = true;
     };
-  }, [session]);
+  }, [session, copy]);
 
   async function loginByTag() {
     await runBusy(async () => {
@@ -114,21 +97,33 @@ export default function App() {
         telegramInitData: getTelegramInitData(),
         telegramChatId: getTelegramChatId()
       });
-      setSession(data);
-      window.localStorage.setItem(SESSION_STORAGE_KEY, data.identity.playerTag);
-      setPlayerTag(data.identity.playerTag);
-      setTab(0);
-      setClanDetails(null);
-      setSelectedClanTag("");
-      await loadTelegramSync(data.identity.playerTag);
-      await loadPlayerProfile(data.identity.playerTag);
-      setCurrentView("dashboard");
-      setFeedback({
-        text: `Загружен игрок ${data.identity.playerName} (${data.identity.playerTag})`,
-        severity: "success"
-      });
+
+      await applySession(data, copy.loginSuccess(data.identity.playerName, data.identity.playerTag));
       notify("success");
     });
+  }
+
+  async function applySession(nextSession, successMessage) {
+    setSession(nextSession);
+    setPlayerTag(nextSession.identity.playerTag);
+    setActiveTab("home");
+    setCurrentView("dashboard");
+    window.localStorage.setItem(STORAGE_KEYS.playerTag, nextSession.identity.playerTag);
+
+    const [nextClanDetails, nextTelegramSync, nextPlayerProfile] = await Promise.all([
+      apiGet(`/miniapp/clan/details?clanTag=${encodeURIComponent(nextSession.identity.clanTag)}`),
+      apiGet(`/miniapp/telegram/sync?playerTag=${encodeURIComponent(nextSession.identity.playerTag)}`),
+      apiGet(
+        `/miniapp/player/profile?playerTag=${encodeURIComponent(nextSession.identity.playerTag)}&windowWeeks=${encodeURIComponent(
+          profileWindowWeeks
+        )}`
+      )
+    ]);
+
+    setClanDetails(nextClanDetails);
+    setTelegramSync(nextTelegramSync);
+    setPlayerProfile(nextPlayerProfile);
+    setFeedback({ text: successMessage, severity: "success" });
   }
 
   async function refreshDashboard() {
@@ -137,37 +132,28 @@ export default function App() {
     }
 
     await runBusy(async () => {
-      const data = await apiGet(
-        `/miniapp/player/dashboard?playerTag=${encodeURIComponent(session.identity.playerTag)}`
-      );
+      const data = await apiGet(`/miniapp/player/dashboard?playerTag=${encodeURIComponent(session.identity.playerTag)}`);
       setSession(data);
-      window.localStorage.setItem(SESSION_STORAGE_KEY, data.identity.playerTag);
-      setClanDetails(null);
-      setSelectedClanTag("");
-      await loadTelegramSync(data.identity.playerTag);
-      await loadPlayerProfile(data.identity.playerTag);
-      setCurrentView("dashboard");
-      setFeedback({ text: "Данные войны клана обновлены.", severity: "success" });
-      notify("success");
-    });
-  }
-
-  async function loadClanDetails(clanTag) {
-    await runBusy(async () => {
-      const data = await apiGet(`/miniapp/clan/details?clanTag=${encodeURIComponent(clanTag)}`);
-      setSelectedClanTag(clanTag);
-      setClanDetails(data);
-      setFeedback({ text: `Загружена статистика клана ${data.clanName}.`, severity: "success" });
+      const [nextClanDetails, nextTelegramSync, nextPlayerProfile] = await Promise.all([
+        apiGet(`/miniapp/clan/details?clanTag=${encodeURIComponent(data.identity.clanTag)}`),
+        apiGet(`/miniapp/telegram/sync?playerTag=${encodeURIComponent(data.identity.playerTag)}`),
+        apiGet(
+          `/miniapp/player/profile?playerTag=${encodeURIComponent(data.identity.playerTag)}&windowWeeks=${encodeURIComponent(
+            profileWindowWeeks
+          )}`
+        )
+      ]);
+      setClanDetails(nextClanDetails);
+      setTelegramSync(nextTelegramSync);
+      setPlayerProfile(nextPlayerProfile);
+      setFeedback({ text: copy.dashboardUpdated, severity: "success" });
       notify("success");
     });
   }
 
   async function notifyNotPlayed() {
     if (!session?.linkedTelegramGroupId) {
-      setFeedback({
-        text: "Для этого клана не настроена Telegram-группа. Сначала выполните /setup #CLANTAG в чате.",
-        severity: "warning"
-      });
+      setFeedback({ text: copy.noTelegramGroup, severity: "warning" });
       return;
     }
 
@@ -178,14 +164,11 @@ export default function App() {
       });
 
       if (!result.sent) {
-        setFeedback({ text: result.text ?? "Уведомления не отправлены.", severity: "info" });
+        setFeedback({ text: result.text ?? copy.notifySkipped, severity: "info" });
         return;
       }
 
-      setFeedback({
-        text: `Отметки отправлены: привязанных ${result.linkedTargets}, непривязанных ${result.unlinkedTargets}.`,
-        severity: "success"
-      });
+      setFeedback({ text: copy.notifyDone(result.linkedTargets, result.unlinkedTargets), severity: "success" });
       notify("success");
     });
   }
@@ -221,10 +204,7 @@ export default function App() {
 
   async function relinkTelegramUser(platformUserId, displayName, targetPlayerTag) {
     if (!session?.linkedTelegramGroupId) {
-      setFeedback({
-        text: "Для этого клана не настроена Telegram-группа.",
-        severity: "warning"
-      });
+      setFeedback({ text: copy.telegramGroupMissing, severity: "warning" });
       return;
     }
 
@@ -235,10 +215,37 @@ export default function App() {
         displayName,
         playerTag: targetPlayerTag
       });
+
       await loadTelegramSync(session.identity.playerTag);
-      setFeedback({ text: "Привязка Telegram обновлена.", severity: "success" });
+      setFeedback({ text: copy.telegramSyncUpdated, severity: "success" });
       notify("success");
     });
+  }
+
+  async function unlinkPlayerTag() {
+    await runBusy(async () => {
+      const telegramInitData = getTelegramInitData();
+
+      if (telegramInitData) {
+        await apiPost("/miniapp/player/unlink", { telegramInitData });
+        setFeedback({ text: copy.unlinkSuccess, severity: "success" });
+      } else {
+        setFeedback({ text: copy.unlinkLocalOnly, severity: "info" });
+      }
+
+      clearSessionState();
+    });
+  }
+
+  function clearSessionState() {
+    setSession(null);
+    setClanDetails(null);
+    setTelegramSync(null);
+    setPlayerProfile(null);
+    setPlayerTag("");
+    setCurrentView("dashboard");
+    setActiveTab("home");
+    window.localStorage.removeItem(STORAGE_KEYS.playerTag);
   }
 
   async function runBusy(action) {
@@ -246,7 +253,7 @@ export default function App() {
       setBusy(true);
       await action();
     } catch (error) {
-      setFeedback({ text: error.message || "Произошла непредвиденная ошибка.", severity: "error" });
+      setFeedback({ text: error.message || copy.unexpectedError, severity: "error" });
       notify("error");
     } finally {
       setBusy(false);
@@ -254,119 +261,95 @@ export default function App() {
   }
 
   return (
-    <ThemeProvider theme={appTheme}>
+    <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Container
-        maxWidth="md"
-        sx={{
-          py: 2.5,
-          pb: session && currentView === "dashboard" ? { xs: 12, sm: 4 } : 4,
-          overflowX: "hidden"
-        }}
-      >
-        <Stack spacing={1.6} sx={{ mb: 2.5 }}>
-          <Typography variant="h4">Clan War Control</Typography>
-          <Typography variant="body2" sx={{ color: "#b3d3e8", overflowWrap: "anywhere" }}>
-            {titleLine}
-          </Typography>
-        </Stack>
+      <Box sx={{ minHeight: "100vh", px: { xs: 0.8, md: 0 } }}>
+        <Stack spacing={1.2} sx={{ maxWidth: 1320, mx: "auto", pt: 2 }}>
+          {feedback?.text ? (
+            <Alert severity={feedback.severity} sx={{ mx: { xs: 1.2, md: 3 } }}>
+              {feedback.text}
+            </Alert>
+          ) : null}
 
-        {feedback.text && (
-          <Alert severity={feedback.severity} sx={{ mb: 2 }}>
-            {feedback.text}
-          </Alert>
-        )}
+          {!session ? (
+            <Box sx={{ px: { xs: 1.2, md: 3 }, pb: 4 }}>
+              <Stack spacing={2} sx={{ mb: 2 }}>
+                <Typography variant="h3">{copy.appName}</Typography>
+                <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 760 }}>
+                  {copy.signInText}
+                </Typography>
+              </Stack>
+              <SignInPage copy={copy} playerTag={playerTag} onPlayerTagChange={setPlayerTag} onSignIn={loginByTag} busy={busy} />
+            </Box>
+          ) : null}
 
-        {!session && (
-          <SignInPage
-            playerTag={playerTag}
-            onPlayerTagChange={setPlayerTag}
-            onSignIn={loginByTag}
-            busy={busy}
-          />
-        )}
-
-        {session && currentView === "dashboard" && (
-          <>
+          {session && currentView === "dashboard" ? (
             <DashboardPage
-              tab={tab}
-              onTabChange={setTab}
-              dashboard={session.dashboard}
+              copy={copy}
               identity={session.identity}
-              authorizedTags={session.authorizedPlayerTags ?? []}
-              selectedClanTag={selectedClanTag}
+              dashboard={session.dashboard}
               clanDetails={clanDetails}
-              onRefresh={refreshDashboard}
-              onLoadClanDetails={loadClanDetails}
-              onOpenBot={() => openBotLink(session.botLink)}
-              hasBotLink={Boolean(session.botLink)}
-              onNotifyNotPlayed={notifyNotPlayed}
-              canNotifyNotPlayed={Boolean(session.linkedTelegramGroupId)}
               telegramSync={telegramSync}
               playerProfile={playerProfile}
+              authorizedTags={session.authorizedPlayerTags ?? []}
+              themeMode={themeMode}
+              language={language}
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+              onRefresh={refreshDashboard}
+              onNotifyNotPlayed={notifyNotPlayed}
+              onOpenBot={() => openBotLink(session.botLink)}
+              hasBotLink={Boolean(session.botLink)}
+              canNotifyNotPlayed={Boolean(session.linkedTelegramGroupId)}
               onOpenPlayerProfile={openPlayerProfile}
-              onLoadTelegramSync={() => runBusy(() => loadTelegramSync(session.identity.playerTag))}
               onRelinkTelegramUser={relinkTelegramUser}
+              onLoadTelegramSync={() => runBusy(() => loadTelegramSync(session.identity.playerTag))}
+              onThemeChange={setThemeMode}
+              onLanguageChange={setLanguage}
+              onUnlink={unlinkPlayerTag}
               busy={busy}
             />
-            <Paper
-              elevation={0}
-              sx={{
-                position: "fixed",
-                left: 12,
-                right: 12,
-                bottom: 12,
-                zIndex: 20,
-                display: { xs: "block", md: "none" },
-                borderRadius: 3,
-                overflow: "hidden"
-              }}
-            >
-              <Box sx={{ overflowX: "auto", px: 0.8, py: 0.8 }}>
-                <Stack direction="row" spacing={0.8} sx={{ minWidth: "max-content" }}>
-                  {MOBILE_TABS.map((label, index) => (
-                    <Button
-                      key={label}
-                      size="small"
-                      variant={tab === index ? "contained" : "outlined"}
-                      onClick={() => setTab(index)}
-                      sx={{ minWidth: 72, px: 1.2, whiteSpace: "nowrap", flexShrink: 0 }}
-                    >
-                      {label}
-                    </Button>
-                  ))}
-                </Stack>
-              </Box>
-            </Paper>
-          </>
-        )}
+          ) : null}
 
-        {session && currentView === "player" && (
-          <PlayerProfilePage
-            profile={playerProfile}
-            profileWindowWeeks={profileWindowWeeks}
-            onWindowChange={(value) => {
-              setProfileWindowWeeks(value);
-              return runBusy(() =>
-                loadPlayerProfile(playerProfile?.playerTag ?? session.identity.playerTag, value)
-              );
-            }}
-            onBack={() => setCurrentView("dashboard")}
-            onRefresh={() =>
-              runBusy(() =>
-                loadPlayerProfile(playerProfile?.playerTag ?? session.identity.playerTag, profileWindowWeeks)
-              )
-            }
-            busy={busy}
-          />
-        )}
+          {session && currentView === "player" ? (
+            <Box sx={{ px: { xs: 1.2, md: 3 }, pb: 3 }}>
+              <PlayerProfilePage
+                copy={copy}
+                language={language}
+                profile={playerProfile}
+                profileWindowWeeks={profileWindowWeeks}
+                onWindowChange={(value) => {
+                  setProfileWindowWeeks(value);
+                  return runBusy(() =>
+                    loadPlayerProfile(playerProfile?.playerTag ?? session.identity.playerTag, value)
+                  );
+                }}
+                onBack={() => setCurrentView("dashboard")}
+                onRefresh={() =>
+                  runBusy(() =>
+                    loadPlayerProfile(playerProfile?.playerTag ?? session.identity.playerTag, profileWindowWeeks)
+                  )
+                }
+                busy={busy}
+              />
+            </Box>
+          ) : null}
+        </Stack>
 
-        {busy && (
-          <Box sx={{ position: "fixed", right: 18, bottom: 18 }}>
-            <CircularProgress size={34} thickness={4.4} />
+        {busy ? (
+          <Box sx={{ position: "fixed", right: 18, bottom: 18, zIndex: 30 }}>
+            <CircularProgress size={34} thickness={4.5} />
           </Box>
-        )}
-      </Container>
+        ) : null}
+      </Box>
     </ThemeProvider>
   );
+}
+
+function loadStoredValue(key, fallbackValue) {
+  if (typeof window === "undefined") {
+    return fallbackValue;
+  }
+
+  return window.localStorage.getItem(key) ?? fallbackValue;
 }

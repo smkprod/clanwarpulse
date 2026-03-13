@@ -1,71 +1,67 @@
 import { Box, Button, Chip, Paper, Stack, TextField, Typography } from "@mui/material";
 
-export function SignInPage({ playerTag, onPlayerTagChange, onSignIn, busy }) {
+export function SignInPage({ copy, playerTag, onPlayerTagChange, onSignIn, busy }) {
   return (
-    <Paper
-      elevation={0}
-      sx={{
-        position: "relative",
-        overflow: "hidden",
-        p: { xs: 1.7, sm: 2.2 },
-        border: "1px solid rgba(132,186,217,0.2)",
-        backdropFilter: "blur(12px)",
-        background:
-          "linear-gradient(180deg, rgba(9, 23, 36, 0.94) 0%, rgba(8, 18, 30, 0.88) 100%)"
-      }}
-    >
-      <Box
-        sx={{
-          position: "absolute",
-          inset: 0,
-          background:
-            "radial-gradient(580px 280px at 12% 0%, rgba(110, 214, 255, 0.18) 0%, transparent 60%), radial-gradient(460px 260px at 100% 10%, rgba(101, 240, 194, 0.14) 0%, transparent 62%)",
-          pointerEvents: "none"
-        }}
-      />
-      <Stack spacing={1.5} sx={{ position: "relative" }}>
-        <Chip label="Clan War SaaS" color="primary" sx={{ alignSelf: "flex-start" }} />
-        <Stack spacing={0.8}>
-          <Typography variant="h5">Контроль войны клана в Telegram</Typography>
-          <Typography variant="body2" sx={{ color: "#a9cde3", maxWidth: 560 }}>
-            Подключите тег игрока и откройте дашборд с участием в КВ, прогнозом очков,
-            историей клана и Telegram-напоминаниями.
+    <Paper elevation={0} sx={shellSx}>
+      <Box sx={glowSx} />
+      <Stack spacing={2.2} sx={{ position: "relative" }}>
+        <Chip label={copy.signInBadge} color="primary" sx={{ alignSelf: "flex-start" }} />
+        <Stack spacing={1}>
+          <Typography variant="h4" sx={{ maxWidth: 660 }}>
+            {copy.signInTitle}
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 700 }}>
+            {copy.signInText}
           </Typography>
         </Stack>
-        <Paper
-          variant="outlined"
-          sx={{
-            p: 1.2,
-            borderColor: "rgba(146, 204, 234, 0.16)",
-            bgcolor: "rgba(7, 18, 29, 0.62)"
-          }}
-        >
-          <Typography variant="subtitle2" sx={{ mb: 0.35 }}>
-            Что будет после входа
-          </Typography>
-          <Typography variant="body2" sx={{ color: "#9ec2da" }}>
-            Mini app привяжет ваш тег к Telegram-профилю и откроет персональный доступ к
-            клановой статистике.
-          </Typography>
+        <Paper elevation={0} sx={hintSx}>
+          <Stack spacing={0.5}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+              {copy.signInHintTitle}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {copy.signInHintText}
+            </Typography>
+          </Stack>
         </Paper>
         <Stack direction={{ xs: "column", sm: "row" }} spacing={1.2}>
           <TextField
             fullWidth
-            label="Тег игрока"
+            label={copy.playerTag}
             value={playerTag}
-            onChange={(e) => onPlayerTagChange(e.target.value)}
+            onChange={(event) => onPlayerTagChange(event.target.value)}
             placeholder="#PLAYER"
           />
-          <Button
-            variant="contained"
-            onClick={onSignIn}
-            disabled={busy || !playerTag.trim()}
-            sx={{ minWidth: { sm: 148 } }}
-          >
-            Подключить
+          <Button variant="contained" size="large" onClick={onSignIn} disabled={busy || !playerTag.trim()} sx={{ minWidth: { sm: 176 } }}>
+            {copy.connect}
           </Button>
         </Stack>
       </Stack>
     </Paper>
   );
 }
+
+const shellSx = {
+  position: "relative",
+  overflow: "hidden",
+  p: { xs: 2.2, md: 3 },
+  border: (theme) => `1px solid ${theme.palette.divider}`,
+  background: (theme) =>
+    theme.palette.mode === "dark"
+      ? "linear-gradient(145deg, rgba(255,122,89,0.14), rgba(17,34,57,0.84) 42%, rgba(8,17,30,0.96))"
+      : "linear-gradient(145deg, rgba(255,122,89,0.13), rgba(255,255,255,0.95) 44%, rgba(245,239,231,0.98))"
+};
+
+const glowSx = {
+  position: "absolute",
+  inset: 0,
+  background:
+    "radial-gradient(520px 240px at 0% 0%, rgba(255,255,255,0.18) 0%, transparent 62%), radial-gradient(420px 260px at 100% 0%, rgba(35,216,163,0.14) 0%, transparent 62%)",
+  pointerEvents: "none"
+};
+
+const hintSx = {
+  p: 2,
+  border: (theme) => `1px solid ${theme.palette.divider}`,
+  bgcolor: (theme) => theme.palette.background.paper
+};

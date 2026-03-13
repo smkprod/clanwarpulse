@@ -22,6 +22,11 @@ public class PlayerLinkRepository : IPlayerLinkRepository
             .OrderByDescending(x => x.LinkedAtUtc)
             .FirstOrDefaultAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<PlayerLink>> GetByUserAsync(Guid userId, CancellationToken cancellationToken)
+        => await _db.PlayerLinks
+            .Where(x => x.UserId == userId)
+            .ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyList<PlayerLink>> GetByGroupAsync(Guid groupId, CancellationToken cancellationToken)
         => await _db.PlayerLinks
             .Include(x => x.User)
@@ -34,6 +39,12 @@ public class PlayerLinkRepository : IPlayerLinkRepository
     public Task UpdateAsync(PlayerLink link, CancellationToken cancellationToken)
     {
         _db.PlayerLinks.Update(link);
+        return Task.CompletedTask;
+    }
+
+    public Task DeleteRangeAsync(IEnumerable<PlayerLink> links, CancellationToken cancellationToken)
+    {
+        _db.PlayerLinks.RemoveRange(links);
         return Task.CompletedTask;
     }
 }

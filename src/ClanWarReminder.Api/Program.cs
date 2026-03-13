@@ -271,6 +271,34 @@ app.MapPost("/miniapp/auth/restore", async (
     }
 });
 
+app.MapPost("/miniapp/player/unlink", async (
+    PlayerUnlinkRequest request,
+    TelegramInitDataValidator telegramValidator,
+    PlayerLinkService playerLinkService,
+    CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(request.TelegramInitData))
+    {
+        return Results.BadRequest(new { error = "Telegram auth data is required." });
+    }
+
+    if (!telegramValidator.TryValidate(request.TelegramInitData, out var telegramIdentity, out var telegramError))
+    {
+        return Results.BadRequest(new { error = telegramError });
+    }
+
+    var removedLinks = await playerLinkService.UnlinkAsync(
+        PlatformType.Telegram,
+        telegramIdentity!.UserId,
+        cancellationToken);
+
+    return Results.Ok(new
+    {
+        ok = true,
+        removedLinks
+    });
+});
+
 app.MapGet("/miniapp/player/dashboard", async (
     string playerTag,
     ClanStatusService statusService,
@@ -788,6 +816,7 @@ public sealed record TelegramAuthRequest(string InitData);
 public sealed record TelegramAuthResponse(string UserId, string DisplayName, string? Username, DateTimeOffset AuthDateUtc);
 public sealed record PlayerAuthRequest(string PlayerTag, string? TelegramInitData = null, string? TelegramChatId = null);
 public sealed record PlayerRestoreRequest(string TelegramInitData, string? TelegramChatId = null);
+public sealed record PlayerUnlinkRequest(string TelegramInitData);
 public sealed record PlayerAuthResponse(
     PlayerIdentityResult Identity,
     ClanWarDashboard Dashboard,

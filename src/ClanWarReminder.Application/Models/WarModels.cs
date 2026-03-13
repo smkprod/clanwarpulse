@@ -44,15 +44,27 @@ public sealed record ClanWarClanHistoryPoint(
     int Score,
     int Rank);
 
+public sealed record ClanMemberListEntry(
+    string PlayerTag,
+    string PlayerName,
+    string Role,
+    int Trophies,
+    int Donations,
+    int ExperienceLevel);
+
 public sealed record ClanWarClanDetails(
     string ClanTag,
     string ClanName,
+    string Region,
     int CurrentScore,
+    int ClanTrophies,
+    int RequiredTrophies,
     int Fame,
     int RepairPoints,
     int ParticipantsCount,
     double AverageRecentScore,
     int BestRecentScore,
+    IReadOnlyList<ClanMemberListEntry> Members,
     IReadOnlyList<ClanContributorStats> TopContributors,
     IReadOnlyList<ClanWarClanHistoryPoint> RecentWars);
 

@@ -1,238 +1,182 @@
-import { Box, Button, Chip, LinearProgress, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
+import { Button, Chip, LinearProgress, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
+import { getLocale } from "../i18n";
 
-export function PlayerProfilePage({ profile, profileWindowWeeks, onWindowChange, onBack, onRefresh, busy }) {
+export function PlayerProfilePage({ copy, language, profile, profileWindowWeeks, onWindowChange, onBack, onRefresh, busy }) {
   if (!profile) {
     return (
-      <Paper elevation={0} sx={shellSx}>
+      <Paper elevation={0} sx={surfaceSx}>
         <Stack spacing={1.2}>
-          <Button variant="outlined" onClick={onBack} sx={{ alignSelf: "flex-start" }}>Назад</Button>
-          <Typography color="text.secondary">Профиль игрока пока не загружен.</Typography>
+          <Button variant="outlined" onClick={onBack} sx={{ alignSelf: "flex-start" }}>
+            {copy.profile.back}
+          </Button>
+          <Typography color="text.secondary">{copy.profile.noProfile}</Typography>
         </Stack>
       </Paper>
     );
   }
 
   const recentWeeks = profile.recentWeeks ?? [];
-  const weeksWithContribution = recentWeeks.filter((week) => (week.totalContribution ?? 0) > 0);
-  const bestWeek = weeksWithContribution.reduce((best, week) =>
-    !best || (week.totalContribution ?? 0) > (best.totalContribution ?? 0) ? week : best, null);
-  const worstWeek = weeksWithContribution.reduce((worst, week) =>
-    !worst || (week.totalContribution ?? 0) < (worst.totalContribution ?? 0) ? week : worst, null);
-  const averageContributionPerWeek = weeksWithContribution.length
-    ? weeksWithContribution.reduce((sum, week) => sum + (week.totalContribution ?? 0), 0) / weeksWithContribution.length
+  const playedWeeks = recentWeeks.filter((week) => (week.totalContribution ?? 0) > 0);
+  const averageContributionPerWeek = playedWeeks.length
+    ? playedWeeks.reduce((sum, week) => sum + (week.totalContribution ?? 0), 0) / playedWeeks.length
     : 0;
-  const averageContributionPerBattle = profile.totalTrackedWarBattles > 0
-    ? recentWeeks.reduce((sum, week) => sum + (week.totalContribution ?? 0), 0) / profile.totalTrackedWarBattles
-    : 0;
+  const averageContributionPerBattle =
+    profile.totalTrackedWarBattles > 0
+      ? recentWeeks.reduce((sum, week) => sum + (week.totalContribution ?? 0), 0) / profile.totalTrackedWarBattles
+      : 0;
   const recentFormScore = recentWeeks.slice(0, 3).reduce((sum, week) => sum + (week.totalContribution ?? 0), 0);
 
   return (
-    <Paper elevation={0} sx={shellSx}>
-      <Stack spacing={1.2}>
-        <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={1}>
-          <Button variant="outlined" onClick={onBack} sx={{ alignSelf: "flex-start" }}>Назад к клану</Button>
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ alignSelf: "flex-start" }}>
-            <TextField
-              select
-              size="small"
-              label="Диапазон КВ"
-              value={profileWindowWeeks}
-              onChange={(e) => onWindowChange(Number(e.target.value))}
-              sx={{ minWidth: 140 }}
-            >
-              {[3, 5, 7, 10].map((value) => (
-                <MenuItem key={value} value={value}>
-                  Последние {value}
-                </MenuItem>
-              ))}
-            </TextField>
-            <Button variant="contained" onClick={onRefresh} disabled={busy} sx={{ alignSelf: "flex-start" }}>Обновить профиль</Button>
-          </Stack>
-        </Stack>
-
-        <Paper variant="outlined" sx={cardSx}>
+    <Stack spacing={1.5}>
+      <Paper elevation={0} sx={surfaceSx}>
+        <Stack spacing={1.6}>
           <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={1}>
-            <Box sx={{ minWidth: 0 }}>
-              <Typography sx={{ fontWeight: 800, fontSize: "1.2rem", overflowWrap: "anywhere" }}>{profile.playerName}</Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>{profile.playerTag} • {profile.currentClanName} • {profile.currentClanTag}</Typography>
-            </Box>
-            <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-              <InfoChip text={`Статус ${profile.activityLabel}`} color={profile.activityLabel === "Активный" ? "success" : profile.activityLabel === "Нестабильный" ? "warning" : "default"} />
-              <InfoChip text={`Рейтинг ${profile.activityScore}/100`} color="primary" />
-              <InfoChip text={`Окно ${profile.profileWindowWeeks} КВ`} />
-              <InfoChip text={`Качество ${profile.dataQualityLabel}`} />
+            <Stack spacing={0.8}>
+              <Button variant="outlined" onClick={onBack} sx={{ alignSelf: "flex-start" }}>
+                {copy.profile.back}
+              </Button>
+              <Stack spacing={0.35}>
+                <Typography variant="h5">{copy.profile.title}</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
+                  {profile.playerName} · {profile.playerTag} · {profile.currentClanName}
+                </Typography>
+              </Stack>
+            </Stack>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+              <TextField
+                select
+                size="small"
+                label={copy.profile.range}
+                value={profileWindowWeeks}
+                onChange={(event) => onWindowChange(Number(event.target.value))}
+                sx={{ minWidth: 150 }}
+              >
+                {[3, 5, 7, 10].map((value) => (
+                  <MenuItem key={value} value={value}>
+                    {value}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <Button variant="contained" onClick={onRefresh} disabled={busy}>
+                {copy.profile.refresh}
+              </Button>
             </Stack>
           </Stack>
-        </Paper>
 
-        <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
-          <MetricCard label="Участие" value={`${fmt(profile.overallParticipationRate)}%`} helper={`Покрытие ${profile.availableHistoryWeeks} КВ, показано ${Math.min(profile.profileWindowWeeks, profile.availableHistoryWeeks || profile.profileWindowWeeks)}`} />
-          <MetricCard label="Среднее боев" value={fmt(profile.averageBattlesPerWeek)} helper={`Всего учтено боев ${profile.totalTrackedWarBattles}`} />
-          <MetricCard label="Winrate КВ" value={`${fmt(profile.recentWarWinRate)}%`} helper={`${profile.recentWarWins}-${profile.recentWarLosses} по клановым колодам`} />
-          <MetricCard label="Прогноз" value={`${profile.predictedNextWeekBattles}/16`} helper={`${profile.predictedNextWeekContribution} очков в следующем КВ`} />
-          <MetricCard label="Сейчас" value={`${profile.currentWeekBattlesPlayed}/16`} helper={`${profile.currentWeekContribution} очков в текущем КВ`} />
+          <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+            <Chip label={`${copy.profile.status}: ${profile.activityLabel}`} color={mapStatusColor(profile.activityLabel)} />
+            <Chip label={`${copy.profile.dataQuality}: ${profile.dataQualityLabel}`} variant="outlined" />
+            <Chip label={`${copy.profile.range}: ${profile.profileWindowWeeks}`} variant="outlined" />
+          </Stack>
+
+          <MetricGrid copy={copy} profile={profile} averageContributionPerWeek={averageContributionPerWeek} averageContributionPerBattle={averageContributionPerBattle} recentFormScore={recentFormScore} />
         </Stack>
+      </Paper>
 
-        <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
-          <MetricCard label="Среднее очков" value={fmt(averageContributionPerWeek)} helper="Средний вклад за КВ" />
-          <MetricCard label="За бой" value={fmt(averageContributionPerBattle)} helper="Средние очки за 1 бой" />
-          <MetricCard label="Полный отыгрыш" value={`${fmt(profile.fullCompletionRate)}%`} helper="Сколько раз закрывает все бои" />
-          <MetricCard label="Текущая форма" value={fmt(recentFormScore)} helper="Сумма очков за последние 3 КВ" />
-        </Stack>
-
-        <Stack direction={{ xs: "column", lg: "row" }} spacing={1.2}>
-          <Paper variant="outlined" sx={{ ...cardSx, flex: 1 }}>
-            <Typography sx={{ fontWeight: 700, mb: 0.8 }}>Сильные показатели</Typography>
-            <Stack spacing={0.7}>
-              <InsightRow
-                label="Лучшая КВ"
-                value={bestWeek ? `${bestWeek.warKey} · ${bestWeek.totalContribution ?? 0} очков` : "нет данных"}
-              />
-              <InsightRow
-                label="Слабая КВ"
-                value={worstWeek ? `${worstWeek.warKey} · ${worstWeek.totalContribution ?? 0} очков` : "нет данных"}
-              />
-              <InsightRow
-                label="Winrate по боям"
-                value={`${fmt(profile.recentWarWinRate)}% (${profile.recentWarWins}-${profile.recentWarLosses})`}
-              />
-            </Stack>
-          </Paper>
-          <Paper variant="outlined" sx={{ ...cardSx, flex: 1 }}>
-            <Typography sx={{ fontWeight: 700, mb: 0.8 }}>Текущий статус игрока</Typography>
-            <Stack spacing={0.7}>
-              <InsightRow label="Статус" value={profile.activityLabel} />
-              <InsightRow label="Рейтинг активности" value={`${profile.activityScore}/100`} />
-              <InsightRow
-                label="Текущий бой"
-                value={`${profile.currentWeekBattlesPlayed}/${profile.currentWeekMaxBattles} · осталось ${profile.currentWeekBattlesRemaining}`}
-              />
-              <InsightRow
-                label="Очки за бой сейчас"
-                value={fmt(profile.currentWeekAverageContributionPerBattle)}
-              />
-              <InsightRow
-                label="Winrate сейчас"
-                value={`${fmt(profile.currentWeekWarWinRate)}% (${profile.currentWeekWarWins}-${profile.currentWeekWarLosses})`}
-              />
-            </Stack>
-          </Paper>
-        </Stack>
-
-        <Paper variant="outlined" sx={cardSx}>
-          <Typography sx={{ fontWeight: 700, mb: 0.8 }}>Почему такой прогноз</Typography>
-          <Typography variant="body2" color="text.secondary">
-            Профиль считается по последним {profile.profileWindowWeeks} КВ. Сейчас доступно {profile.availableHistoryWeeks} КВ истории, качество оценки: {profile.dataQualityLabel.toLowerCase()}.
-            Все недели КВ считаются одинаково, без отдельного приоритета для колизея. Winrate по клановым колодам и очки клана по речным гонкам берутся из river race log и battle log Clash Royale API.
+      <Stack direction={{ xs: "column", lg: "row" }} spacing={1.5}>
+        <Paper elevation={0} sx={{ ...surfaceSx, flex: 1.2 }}>
+          <Typography variant="h6" sx={{ mb: 1.1 }}>
+            {copy.profile.recentWars}
           </Typography>
+          {(profile.recentWeeks ?? []).length ? (
+            <Stack spacing={1}>
+              {profile.recentWeeks.map((week) => (
+                <Paper key={`${week.warKey}-${week.clanTag}`} elevation={0} sx={innerCardSx}>
+                  <Stack spacing={0.5}>
+                    <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={0.5}>
+                      <Typography sx={{ fontWeight: 700, overflowWrap: "anywhere" }}>
+                        {week.warKey} · {week.clanName}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {week.battlesPlayed}/{week.maxBattles} · {week.totalContribution ?? 0} pts
+                      </Typography>
+                    </Stack>
+                    <Typography variant="body2" color="text.secondary">
+                      WR {fmt(week.warWinRate ?? 0)}% · Participation {fmt(week.participationRate)}%
+                    </Typography>
+                    <LinearProgress value={Math.min(100, week.participationRate)} variant="determinate" sx={progressSx} />
+                  </Stack>
+                </Paper>
+              ))}
+            </Stack>
+          ) : (
+            <Typography color="text.secondary">{copy.profile.noWarHistory}</Typography>
+          )}
         </Paper>
 
-        <Stack direction={{ xs: "column", lg: "row" }} spacing={1.2}>
-          <Paper variant="outlined" sx={{ ...cardSx, flex: 1.2 }}>
-            <Typography sx={{ fontWeight: 700, mb: 0.8 }}>Последние {profile.profileWindowWeeks} КВ</Typography>
-            <TrendChart weeks={profile.recentWeeks ?? []} />
-          </Paper>
-          <Paper variant="outlined" sx={{ ...cardSx, flex: 1 }}>
-            <Typography sx={{ fontWeight: 700, mb: 0.8 }}>История кланов</Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.8 }}>
-              {profile.clanHistoryNote}
+        <Stack spacing={1.5} sx={{ flex: 0.95 }}>
+          <Paper elevation={0} sx={surfaceSx}>
+            <Typography variant="h6" sx={{ mb: 1.1 }}>
+              {copy.profile.recentClans}
             </Typography>
             {(profile.recentClans ?? []).length ? (
-              <Stack spacing={0.7}>
+              <Stack spacing={0.9}>
                 {profile.recentClans.map((clan) => (
-                  <Paper key={`${clan.clanTag}-${clan.lastSeenAtUtc}`} variant="outlined" sx={miniCardSx}>
-                    <Typography variant="body2" sx={{ fontWeight: 700, overflowWrap: "anywhere" }}>{clan.clanName}</Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", overflowWrap: "anywhere" }}>
-                      {clan.clanTag} • боев {clan.warBattles} • очков {clan.totalContribution} • WR {fmt(clan.warWinRate ?? 0)}% ({clan.warWins}-{clan.warLosses})
+                  <Paper key={`${clan.clanTag}-${clan.lastSeenAtUtc}`} elevation={0} sx={innerCardSx}>
+                    <Typography sx={{ fontWeight: 700, overflowWrap: "anywhere" }}>{clan.clanName}</Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
+                      {clan.clanTag} · {clan.totalContribution} pts · WR {fmt(clan.warWinRate ?? 0)}%
                     </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", overflowWrap: "anywhere" }}>
-                      с {formatDate(clan.firstSeenAtUtc)} по {formatDate(clan.lastSeenAtUtc)}
+                    <Typography variant="caption" color="text.secondary">
+                      {formatDate(clan.firstSeenAtUtc, language)} - {formatDate(clan.lastSeenAtUtc, language)}
                     </Typography>
                   </Paper>
                 ))}
               </Stack>
             ) : (
-              <Typography color="text.secondary">Нет доступной истории кланов.</Typography>
+              <Typography color="text.secondary">{copy.profile.noClanHistory}</Typography>
             )}
           </Paper>
-        </Stack>
 
-        <Paper variant="outlined" sx={cardSx}>
-          <Typography sx={{ fontWeight: 700, mb: 0.8 }}>История по КВ</Typography>
-          <Stack spacing={0.9}>
-            {(profile.recentWeeks ?? []).map((week) => (
-              <Box key={`${week.warKey}-${week.clanTag}`}>
-                <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={0.4}>
-                  <Typography variant="body2" sx={{ fontWeight: 700, overflowWrap: "anywhere" }}>
-                    {week.warKey} • {week.clanName}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {week.battlesPlayed}/{week.maxBattles} • {fmt(week.participationRate)}%{week.totalContribution != null ? ` • ${week.totalContribution} очков` : ""}{week.clanScore != null ? ` • клан ${week.clanScore} кубков` : ""}{week.warWinRate != null ? ` • WR ${fmt(week.warWinRate)}%` : ""}
-                  </Typography>
-                </Stack>
-                <LinearProgress variant="determinate" value={Math.min(100, week.participationRate)} sx={progressSx} />
-              </Box>
-            ))}
-          </Stack>
-        </Paper>
+          <Paper elevation={0} sx={surfaceSx}>
+            <Typography variant="h6" sx={{ mb: 0.7 }}>
+              {copy.profile.why}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {copy.profile.whyText}
+            </Typography>
+          </Paper>
+        </Stack>
       </Stack>
-    </Paper>
+    </Stack>
   );
 }
 
-function TrendChart({ weeks }) {
-  if (!weeks.length) {
-    return <Typography color="text.secondary">Нет данных для графика.</Typography>;
-  }
-
-  const ordered = [...weeks].reverse();
-  const maxContribution = Math.max(...ordered.map((x) => x.totalContribution ?? 0), 1);
+function MetricGrid({ copy, profile, averageContributionPerWeek, averageContributionPerBattle, recentFormScore }) {
   return (
-    <Stack spacing={1}>
-      {ordered.map((week) => (
-        <Box key={`${week.warKey}-${week.clanTag}`}>
-          <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={0.3}>
-            <Typography variant="body2">{week.warKey}</Typography>
-            <Typography variant="caption" color="text.secondary">
-              {week.totalContribution != null ? `${week.totalContribution} очков` : "очки недоступны"}{week.clanScore != null ? ` • клан ${week.clanScore} кубков` : ""} • {week.battlesPlayed}/16{week.warWinRate != null ? ` • WR ${fmt(week.warWinRate)}%` : ""}
-            </Typography>
-          </Stack>
-          <Stack direction="row" spacing={0.7} sx={{ mt: 0.45 }}>
-            <Box sx={{ flex: 1 }}>
-              <LinearProgress variant="determinate" value={Math.min(100, ((week.totalContribution ?? 0) / maxContribution) * 100)} sx={progressSx} />
-            </Box>
-            <Box sx={{ flex: 1 }}>
-              <LinearProgress color="secondary" variant="determinate" value={Math.min(100, (week.battlesPlayed / 16) * 100)} sx={progressSx} />
-            </Box>
-          </Stack>
-        </Box>
-      ))}
-      <Typography variant="caption" color="text.secondary">Первая полоса: очки КВ. Вторая: сыгранные бои.</Typography>
-    </Stack>
+    <>
+      <Stack direction={{ xs: "column", md: "row" }} spacing={1.1}>
+        <MetricCard label={copy.profile.metrics.participation} value={`${fmt(profile.overallParticipationRate)}%`} helper={`${profile.availableHistoryWeeks} wars`} />
+        <MetricCard label={copy.profile.metrics.avgBattles} value={fmt(profile.averageBattlesPerWeek)} helper={`${profile.totalTrackedWarBattles} tracked`} />
+        <MetricCard label={copy.profile.metrics.winRate} value={`${fmt(profile.recentWarWinRate)}%`} helper={`${profile.recentWarWins}-${profile.recentWarLosses}`} />
+        <MetricCard label={copy.profile.metrics.prediction} value={`${profile.predictedNextWeekBattles}/16`} helper={`${profile.predictedNextWeekContribution} pts`} />
+        <MetricCard label={copy.profile.metrics.current} value={`${profile.currentWeekBattlesPlayed}/16`} helper={`${profile.currentWeekContribution} pts`} />
+      </Stack>
+
+      <Stack direction={{ xs: "column", md: "row" }} spacing={1.1}>
+        <MetricCard label={copy.profile.metrics.avgWeek} value={fmt(averageContributionPerWeek)} helper="Per war window" />
+        <MetricCard label={copy.profile.metrics.avgBattle} value={fmt(averageContributionPerBattle)} helper="Average per battle" />
+        <MetricCard label={copy.profile.metrics.fullCompletion} value={`${fmt(profile.fullCompletionRate)}%`} helper="Closed all battles" />
+        <MetricCard label={copy.profile.metrics.form} value={fmt(recentFormScore)} helper="Last 3 wars total" />
+      </Stack>
+    </>
   );
 }
 
 function MetricCard({ label, value, helper }) {
   return (
-    <Paper variant="outlined" sx={{ flex: 1, p: 1.1, borderColor: "rgba(132,186,217,0.2)", bgcolor: "rgba(6,17,27,0.6)" }}>
-      <Typography variant="body2" sx={{ color: "#9ec2da" }}>{label}</Typography>
-      <Typography variant="h5" sx={{ fontWeight: 800, mt: 0.2 }}>{value}</Typography>
-      <Typography variant="caption" color="text.secondary">{helper}</Typography>
+    <Paper elevation={0} sx={{ ...innerCardSx, flex: 1 }}>
+      <Typography variant="body2" color="text.secondary">
+        {label}
+      </Typography>
+      <Typography variant="h5" sx={{ mt: 0.3 }}>
+        {value}
+      </Typography>
+      <Typography variant="caption" color="text.secondary">
+        {helper}
+      </Typography>
     </Paper>
   );
-}
-
-function InsightRow({ label, value }) {
-  return (
-    <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={0.35}>
-      <Typography variant="body2" sx={{ color: "#9ec2da" }}>{label}</Typography>
-      <Typography variant="body2" sx={{ fontWeight: 700, overflowWrap: "anywhere" }}>{value}</Typography>
-    </Stack>
-  );
-}
-
-function InfoChip({ text, color }) {
-  return <Chip label={text} color={color} size="small" sx={{ maxWidth: "100%", "& .MuiChip-label": { overflow: "hidden", textOverflow: "ellipsis" } }} />;
 }
 
 function fmt(value) {
@@ -240,12 +184,40 @@ function fmt(value) {
   return Number.isInteger(number) ? String(number) : number.toFixed(1);
 }
 
-function formatDate(value) {
+function formatDate(value, language) {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? String(value) : new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  return new Intl.DateTimeFormat(getLocale(language), {
+    day: "2-digit",
+    month: "short",
+    year: "numeric"
+  }).format(date);
 }
 
-const shellSx = { p: 1.6, border: "1px solid rgba(132,186,217,0.2)", backdropFilter: "blur(6px)", overflow: "hidden" };
-const cardSx = { p: 1.2, borderColor: "rgba(132,186,217,0.2)", bgcolor: "rgba(6,17,27,0.6)", overflow: "hidden" };
-const miniCardSx = { p: 0.8, borderColor: "rgba(132,186,217,0.14)", bgcolor: "rgba(8,19,29,0.58)" };
-const progressSx = { mt: 0.45, height: 8, borderRadius: 999, bgcolor: "rgba(255,255,255,0.08)" };
+function mapStatusColor(label) {
+  if (label === "Активный" || label === "Active") {
+    return "success";
+  }
+
+  if (label === "Нестабильный" || label === "Unstable") {
+    return "warning";
+  }
+
+  return "default";
+}
+
+const surfaceSx = {
+  p: { xs: 1.5, md: 1.8 },
+  border: (theme) => `1px solid ${theme.palette.divider}`
+};
+
+const innerCardSx = {
+  p: 1.2,
+  border: (theme) => `1px solid ${theme.palette.divider}`,
+  bgcolor: (theme) => theme.palette.background.paper
+};
+
+const progressSx = { mt: 0.4, height: 9, borderRadius: 999 };

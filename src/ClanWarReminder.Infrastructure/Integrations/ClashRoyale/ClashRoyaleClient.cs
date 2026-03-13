@@ -280,6 +280,8 @@ public class ClashRoyaleClient : IClashRoyaleClient
     public async Task<ClanWarClanDetails> GetClanDetailsAsync(string clanTag, CancellationToken cancellationToken)
     {
         var payload = await GetCurrentRiverRaceAsync(clanTag, cancellationToken);
+        var details = await GetClanInfoAsync(clanTag, cancellationToken);
+        var members = await GetClanMembersRawAsync(clanTag, cancellationToken);
         var clan = payload.Clan;
         var normalizedClanTag = NormalizeTag(clan.Tag);
         var history = await GetRecentHistoryAsync(normalizedClanTag, cancellationToken);
@@ -317,16 +319,31 @@ public class ClashRoyaleClient : IClashRoyaleClient
         var avgScore = recentWars.Count > 0 ? recentWars.Average(x => x.Score) : 0;
         var bestScore = recentWars.Count > 0 ? recentWars.Max(x => x.Score) : 0;
         var currentScore = ResolveClanScore(clan);
+        var memberEntries = members
+            .Select(member => new ClanMemberListEntry(
+                NormalizeTag(member.Tag),
+                member.Name,
+                member.Role,
+                member.Trophies,
+                member.Donations,
+                member.ExpLevel))
+            .OrderByDescending(member => member.Trophies)
+            .ThenBy(member => member.PlayerName)
+            .ToList();
 
         return new ClanWarClanDetails(
             normalizedClanTag,
-            clan.Name,
+            details.Name,
+            details.Location?.Name ?? "Unknown",
             currentScore,
+            details.ClanScore,
+            details.RequiredTrophies,
             clan.Fame,
             clan.RepairPoints,
-            clan.Participants.Count,
+            details.Members > 0 ? details.Members : clan.Participants.Count,
             Math.Round(avgScore, 1),
             bestScore,
+            memberEntries,
             topContributors,
             recentWars);
     }
@@ -591,6 +608,17 @@ public class ClashRoyaleClient : IClashRoyaleClient
             ?? throw new InvalidOperationException("Clash Royale API returned empty clan members payload.");
 
         return payload.Items;
+    }
+
+    private async Task<ClanDetailsDto> GetClanInfoAsync(string clanTag, CancellationToken cancellationToken)
+    {
+        var encodedTag = Uri.EscapeDataString(NormalizeTag(clanTag));
+        using var request = CreateRequest(HttpMethod.Get, $"{_options.BaseUrl}/clans/{encodedTag}");
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<ClanDetailsDto>(cancellationToken: cancellationToken)
+            ?? throw new InvalidOperationException("Clash Royale API returned empty clan details payload.");
     }
 
     private HttpRequestMessage CreateRequest(HttpMethod method, string url)
@@ -960,6 +988,45 @@ public class ClashRoyaleClient : IClashRoyaleClient
         [JsonPropertyName("tag")]
         public string Tag { get; set; } = string.Empty;
 
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = string.Empty;
+
+        [JsonPropertyName("role")]
+        public string Role { get; set; } = string.Empty;
+
+        [JsonPropertyName("expLevel")]
+        public int ExpLevel { get; set; }
+
+        [JsonPropertyName("trophies")]
+        public int Trophies { get; set; }
+
+        [JsonPropertyName("donations")]
+        public int Donations { get; set; }
+    }
+
+    private sealed class ClanDetailsDto
+    {
+        [JsonPropertyName("tag")]
+        public string Tag { get; set; } = string.Empty;
+
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = string.Empty;
+
+        [JsonPropertyName("location")]
+        public ClanLocationDto? Location { get; set; }
+
+        [JsonPropertyName("clanScore")]
+        public int ClanScore { get; set; }
+
+        [JsonPropertyName("requiredTrophies")]
+        public int RequiredTrophies { get; set; }
+
+        [JsonPropertyName("members")]
+        public int Members { get; set; }
+    }
+
+    private sealed class ClanLocationDto
+    {
         [JsonPropertyName("name")]
         public string Name { get; set; } = string.Empty;
     }
